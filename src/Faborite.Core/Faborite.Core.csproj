@@ -5,7 +5,26 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Faborite.Core</RootNamespace>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>Faborite.Core</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Michael John Peña</Authors>
+    <Company>DataChain Consulting</Company>
+    <Description>Core library for syncing Microsoft Fabric lakehouse data locally. Supports OneLake integration, smart sampling strategies, and multiple export formats.</Description>
+    <PackageTags>microsoft-fabric;lakehouse;onelake;data-sync;azure;fabric</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mjtpena/faborite</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mjtpena/faborite.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <Copyright>Copyright (c) 2026 Michael John Peña</Copyright>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Azure SDKs for OneLake access -->

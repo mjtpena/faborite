@@ -13,10 +13,17 @@
     <ToolCommandName>faborite</ToolCommandName>
     <PackageId>Faborite</PackageId>
     <Version>0.1.0</Version>
-    <Authors>Your Name</Authors>
-    <Description>Sync Microsoft Fabric lakehouse data locally for development</Description>
-    <PackageTags>microsoft-fabric;lakehouse;onelake;data-sync;cli</PackageTags>
+    <Authors>Michael John Peña</Authors>
+    <Company>DataChain Consulting</Company>
+    <Description>CLI tool for syncing Microsoft Fabric lakehouse data locally for faster development. Install globally: dotnet tool install -g Faborite</Description>
+    <PackageTags>microsoft-fabric;lakehouse;onelake;data-sync;cli;dotnet-tool;fabric</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mjtpena/faborite</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mjtpena/faborite.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <Copyright>Copyright (c) 2026 Michael John Peña</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,6 +37,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Faborite.Core\Faborite.Core.csproj" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

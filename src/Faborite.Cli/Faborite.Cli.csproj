@@ -22,7 +22,6 @@
     <RepositoryUrl>https://github.com/mjtpena/faborite.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>icon.png</PackageIcon>
     <Copyright>Copyright (c) 2026 Michael John Peña</Copyright>
   </PropertyGroup>
 

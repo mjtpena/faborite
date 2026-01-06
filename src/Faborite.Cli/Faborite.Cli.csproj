@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Faborite.Cli</RootNamespace>
+    <AssemblyName>faborite</AssemblyName>
+    
+    <!-- Tool metadata -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>faborite</ToolCommandName>
+    <PackageId>Faborite</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Your Name</Authors>
+    <Description>Sync Microsoft Fabric lakehouse data locally for development</Description>
+    <PackageTags>microsoft-fabric;lakehouse;onelake;data-sync;cli</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- CLI framework -->
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    
+    <!-- Rich console output -->
+    <PackageReference Include="Spectre.Console" Version="0.49.1" />
+    <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Faborite.Core\Faborite.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -10,131 +10,121 @@ on:
 
 env:
   DOTNET_VERSION: '10.0.x'
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-    
-    - name: Restore dependencies
-      run: dotnet restore
-    
-    - name: Build
-      run: dotnet build --no-restore --configuration Release
-    
-    - name: Test with coverage
-      run: |
-        dotnet test --no-build --configuration Release \
-          --collect:"XPlat Code Coverage" \
-          --results-directory ./TestResults \
-          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        files: ./TestResults/**/coverage.cobertura.xml
-        fail_ci_if_error: false
-        verbose: true
-
-    - name: Code Coverage Report
-      uses: irongut/CodeCoverageSummary@v1.3.0
-      with:
-        filename: TestResults/**/coverage.cobertura.xml
-        badge: true
-        format: markdown
-        output: both
-        thresholds: '60 80'
-
-    - name: Add Coverage PR Comment
-      uses: marocchino/sticky-pull-request-comment@v2
-      if: github.event_name == 'pull_request'
-      with:
-        recreate: true
-        path: code-coverage-results.md
-
-  security-scan:
-    runs-on: ubuntu-latest
-    needs: build
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-    
-    - name: Install security tools
-      run: |
-        dotnet tool install --global security-scan
-        dotnet tool install --global dotnet-outdated-tool
-
-    - name: Check for outdated packages
-      run: dotnet outdated
-      continue-on-error: true
-
-    - name: Security scan
-      run: security-scan .
-      continue-on-error: true
-
-  publish:
-    runs-on: ubuntu-latest
-    needs: [build, security-scan]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+  build-and-test:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        runtime: [win-x64, linux-x64, osx-x64, osx-arm64]
-    
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
     steps:
-    - uses: actions/checkout@v4
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+      
+    - name: Test
+      run: dotnet test --configuration Release --no-build --verbosity normal
+
+  publish-nuget:
+    name: Publish to NuGet
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
     
-    - name: Publish ${{ matrix.runtime }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Restore dependencies
+      run: dotnet restore
+        
+    - name: Pack Faborite.Core
+      run: dotnet pack src/Faborite.Core/Faborite.Core.csproj -c Release -o ./packages
+      
+    - name: Pack Faborite.Cli
+      run: dotnet pack src/Faborite.Cli/Faborite.Cli.csproj -c Release -o ./packages
+      
+    - name: Push to NuGet
+      run: |
+        dotnet nuget push ./packages/*.nupkg \
+          --api-key ${{ secrets.NUGET_API_KEY }} \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+  publish-release-artifacts:
+    name: Publish Release Artifacts
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    strategy:
+      matrix:
+        rid: [win-x64, linux-x64, osx-x64, osx-arm64]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Publish ${{ matrix.rid }}
       run: |
         dotnet publish src/Faborite.Cli/Faborite.Cli.csproj \
-          --configuration Release \
-          --runtime ${{ matrix.runtime }} \
-          --self-contained true \
+          -c Release \
+          -r ${{ matrix.rid }} \
+          --self-contained \
           -p:PublishSingleFile=true \
-          -p:PublishTrimmed=true \
-          -o ./publish/${{ matrix.runtime }}
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+          -p:IncludeNativeLibrariesForSelfExtract=true \
+          -p:DebugType=None \
+          -p:DebugSymbols=false \
+          -o publish/${{ matrix.rid }}
+    
+    - name: Create archive (Unix)
+      if: matrix.rid != 'win-x64'
+      run: |
+        cd publish/${{ matrix.rid }}
+        tar -czf ../faborite-${{ matrix.rid }}.tar.gz *
+        
+    - name: Create archive (Windows)
+      if: matrix.rid == 'win-x64'
+      shell: pwsh
+      run: |
+        cd publish/${{ matrix.rid }}
+        7z a -tzip ../faborite-${{ matrix.rid }}.zip *
+        
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        name: faborite-${{ matrix.runtime }}
-        path: ./publish/${{ matrix.runtime }}
-        retention-days: 30
-
-  nuget:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-    
-    - name: Pack
-      run: dotnet pack src/Faborite.Core/Faborite.Core.csproj --configuration Release -o ./nupkg
-    
-    - name: Push to NuGet (dry run)
-      run: echo "Would push to NuGet here. Uncomment below when ready."
-      # Uncomment when ready to publish:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./publish/faborite-${{ matrix.rid }}.${{ matrix.rid == 'win-x64' && 'zip' || 'tar.gz' }}
+        asset_name: faborite-${{ matrix.rid }}.${{ matrix.rid == 'win-x64' && 'zip' || 'tar.gz' }}
+        asset_content_type: application/${{ matrix.rid == 'win-x64' && 'zip' || 'gzip' }}
       # run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json

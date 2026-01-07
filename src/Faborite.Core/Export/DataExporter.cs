@@ -7,7 +7,7 @@ namespace Faborite.Core.Export;
 /// <summary>
 /// Exports data to various local formats.
 /// </summary>
-public class DataExporter : IDisposable
+public class DataExporter : IDataExporter
 {
     private readonly DuckDBConnection _connection;
 

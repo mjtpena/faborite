@@ -8,7 +8,7 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Faborite.Core</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Michael John Peña</Authors>
     <Company>DataChain Consulting</Company>
     <Description>Core library for syncing Microsoft Fabric lakehouse data locally. Supports OneLake integration, smart sampling strategies, and multiple export formats.</Description>
@@ -18,7 +18,6 @@
     <RepositoryUrl>https://github.com/mjtpena/faborite.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>icon.png</PackageIcon>
     <Copyright>Copyright (c) 2026 Michael John Peña</Copyright>
   </PropertyGroup>
   
@@ -36,6 +35,7 @@
     
     <!-- DuckDB for sampling -->
     <PackageReference Include="DuckDB.NET.Data" Version="1.2.0" />
+    <PackageReference Include="DuckDB.NET.Data.Full" Version="1.2.0" />
     
     <!-- Configuration -->
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0" />

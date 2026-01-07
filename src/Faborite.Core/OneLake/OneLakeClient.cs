@@ -29,7 +29,7 @@ public record LakehouseFile(
 /// Client for interacting with OneLake (Fabric's storage layer).
 /// OneLake uses ADLS Gen2 protocol.
 /// </summary>
-public class OneLakeClient : IDisposable
+public class OneLakeClient : IOneLakeClient
 {
     private const string OneLakeEndpoint = "https://onelake.dfs.fabric.microsoft.com";
     

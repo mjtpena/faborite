@@ -73,7 +73,8 @@ public class DataSamplerTests : IDisposable
         {
             Strategy = SampleStrategy.Random,
             Rows = 100,
-            Seed = 42
+            Seed = 42,
+            MaxFullTableRows = 10 // Force sampling
         };
 
         // Act
@@ -98,7 +99,8 @@ public class DataSamplerTests : IDisposable
         var config = new SampleConfig
         {
             Strategy = SampleStrategy.Head,
-            Rows = 50
+            Rows = 50,
+            MaxFullTableRows = 10 // Force sampling
         };
 
         // Act
@@ -128,7 +130,8 @@ public class DataSamplerTests : IDisposable
         var config = new SampleConfig
         {
             Strategy = SampleStrategy.Tail,
-            Rows = 50
+            Rows = 50,
+            MaxFullTableRows = 10 // Force sampling
         };
 
         // Act
@@ -180,7 +183,8 @@ public class DataSamplerTests : IDisposable
         {
             Strategy = SampleStrategy.Recent,
             Rows = 100,
-            DateColumn = "created_date"
+            DateColumn = "created_date",
+            MaxFullTableRows = 10 // Force sampling
         };
 
         // Act
@@ -202,7 +206,8 @@ public class DataSamplerTests : IDisposable
         {
             Strategy = SampleStrategy.Query,
             Rows = 1000,
-            WhereClause = "id <= 100"
+            WhereClause = "id <= 100",
+            MaxFullTableRows = 10 // Force sampling
         };
 
         // Act
@@ -269,7 +274,8 @@ public class DataSamplerTests : IDisposable
         var config = new SampleConfig
         {
             Strategy = SampleStrategy.Random,
-            Rows = 100
+            Rows = 100,
+            MaxFullTableRows = 10 // Force sampling
         };
 
         // Act

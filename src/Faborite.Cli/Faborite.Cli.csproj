@@ -12,7 +12,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>faborite</ToolCommandName>
     <PackageId>Faborite</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Michael John Peña</Authors>
     <Company>DataChain Consulting</Company>
     <Description>CLI tool for syncing Microsoft Fabric lakehouse data locally for faster development. Install globally: dotnet tool install -g Faborite</Description>

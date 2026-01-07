@@ -6,10 +6,10 @@ namespace Faborite.Cli.Commands;
 
 public class StatusSettings : CommandSettings
 {
-    [CommandOption("-o|--output")]
+    [CommandOption("-p|--path")]
     [Description("Local output directory to check")]
-    [DefaultValue(".faborite")]
-    public string OutputPath { get; set; } = ".faborite";
+    [DefaultValue("./local_lakehouse")]
+    public string OutputPath { get; set; } = "./local_lakehouse";
 }
 
 public class StatusCommand : Command<StatusSettings>

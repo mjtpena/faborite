@@ -1,0 +1,106 @@
+# Faborite Data Sync for CI/CD
+#
+# This workflow syncs Fabric lakehouse data for use in tests.
+# Data is cached between runs to speed up builds.
+#
+# Required secrets:
+#   - AZURE_TENANT_ID
+#   - AZURE_CLIENT_ID
+#   - AZURE_CLIENT_SECRET
+#   - FABRIC_WORKSPACE_ID
+#   - FABRIC_LAKEHOUSE_ID
+
+name: Sync Test Data
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+  
+  # Scheduled sync (daily at 6 AM UTC)
+  schedule:
+    - cron: '0 6 * * *'
+  
+  # On push to main (optional)
+  push:
+    branches: [main]
+    paths:
+      - 'faborite.json'
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  FABORITE_VERSION: '0.1.0'
+
+jobs:
+  sync-data:
+    name: Sync Fabric Data
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Install Faborite
+        run: dotnet tool install -g Faborite --version ${{ env.FABORITE_VERSION }}
+      
+      - name: Cache synced data
+        id: cache-data
+        uses: actions/cache@v4
+        with:
+          path: ./local_lakehouse
+          key: faborite-data-${{ hashFiles('faborite.json') }}-${{ github.run_number }}
+          restore-keys: |
+            faborite-data-${{ hashFiles('faborite.json') }}-
+            faborite-data-
+      
+      - name: Sync data from Fabric
+        if: steps.cache-data.outputs.cache-hit != 'true'
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          faborite sync \
+            --workspace ${{ secrets.FABRIC_WORKSPACE_ID }} \
+            --lakehouse ${{ secrets.FABRIC_LAKEHOUSE_ID }} \
+            --rows 1000
+      
+      - name: Show sync status
+        run: faborite status
+      
+      - name: Upload data artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-data
+          path: ./local_lakehouse
+          retention-days: 7
+
+  run-tests:
+    name: Run Tests with Synced Data
+    needs: sync-data
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Download data artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: test-data
+          path: ./local_lakehouse
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: pip install duckdb pandas pytest
+      
+      - name: Run tests
+        run: pytest tests/ -v

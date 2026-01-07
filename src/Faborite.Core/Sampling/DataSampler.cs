@@ -16,7 +16,7 @@ public record SampleResult(
 /// <summary>
 /// Samples data from Delta tables using DuckDB.
 /// </summary>
-public class DataSampler : IDisposable
+public class DataSampler : IDataSampler
 {
     private readonly DuckDBConnection _connection;
     private bool _deltaExtensionLoaded;
@@ -210,19 +210,19 @@ public class DataSampler : IDisposable
         return config.Strategy switch
         {
             SampleStrategy.Random => 
-                $"SELECT * FROM {fromClause} USING SAMPLE {n} ROWS (BERNOULLI, REPEATABLE {seed})",
+                $"SELECT * FROM {fromClause} USING SAMPLE {n}",
             
             SampleStrategy.Recent when !string.IsNullOrEmpty(config.DateColumn) =>
                 $"SELECT * FROM {fromClause} ORDER BY \"{config.DateColumn}\" DESC LIMIT {n}",
             
             SampleStrategy.Recent => // Auto-detect date column not implemented in query, fall back to random
-                $"SELECT * FROM {fromClause} USING SAMPLE {n} ROWS (BERNOULLI, REPEATABLE {seed})",
+                $"SELECT * FROM {fromClause} USING SAMPLE {n}",
             
             SampleStrategy.Head =>
                 $"SELECT * FROM {fromClause} LIMIT {n}",
             
             SampleStrategy.Tail =>
-                $"SELECT * FROM (SELECT *, ROW_NUMBER() OVER () as _rn FROM {fromClause}) sub WHERE _rn > (SELECT COUNT(*) FROM {fromClause}) - {n}",
+                $"SELECT * FROM (SELECT *, ROW_NUMBER() OVER () as _rn FROM {fromClause}) sub WHERE _rn > (SELECT COUNT(*) - {n} FROM {fromClause})",
             
             SampleStrategy.Stratified when !string.IsNullOrEmpty(config.StratifyColumn) =>
                 $@"WITH ranked AS (
@@ -242,7 +242,7 @@ public class DataSampler : IDisposable
             SampleStrategy.Full =>
                 $"SELECT * FROM {fromClause}",
             
-            _ => $"SELECT * FROM {fromClause} USING SAMPLE {n} ROWS (BERNOULLI, REPEATABLE {seed})"
+            _ => $"SELECT * FROM {fromClause} USING SAMPLE {n}"
         };
     }
 

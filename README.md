@@ -89,7 +89,7 @@ faborite sync
 
 ```python
 import duckdb
-df = duckdb.read_parquet('.faborite/customers/data.parquet').df()
+df = duckdb.read_parquet('./local_lakehouse/customers/customers.parquet').df()
 ```
 
 ## CLI Reference
@@ -110,7 +110,7 @@ faborite sync [options]
 | `--rows` | `-n` | Number of rows to sample | 10000 |
 | `--strategy` | `-s` | Sampling strategy | `random` |
 | `--format` | `-f` | Output format | `parquet` |
-| `--output` | `-o` | Output directory | `.faborite` |
+| `--output` | `-o` | Output directory | `./local_lakehouse` |
 | `--table` | `-t` | Tables to sync (repeatable) | All tables |
 | `--skip` | | Tables to skip (repeatable) | None |
 | `--parallel` | `-p` | Max parallel downloads | 4 |
@@ -163,7 +163,7 @@ faborite status [options]
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
-| `--output` | `-o` | Local data directory | `.faborite` |
+| `--path` | `-p` | Local data directory | `./local_lakehouse` |
 
 ## Sampling Strategies
 
@@ -196,8 +196,8 @@ Create a `faborite.json` file in your project root:
     "compression": "snappy"
   },
   "sync": {
-    "outputPath": ".faborite",
-    "parallelDownloads": 4,
+    "localPath": "./local_lakehouse",
+    "parallelTables": 4,
     "includeSchema": true
   },
   "auth": {
@@ -234,17 +234,17 @@ All configuration can be overridden with environment variables:
 ## Output Structure
 
 ```
-.faborite/
+./local_lakehouse/
 ├── customers/
-│   ├── data.parquet
-│   └── customers.schema.json
+│   ├── customers.parquet
+│   └── _schema.json
 ├── orders/
-│   ├── data.parquet
-│   └── orders.schema.json
+│   ├── orders.parquet
+│   └── _schema.json
 ├── products/
-│   ├── data.parquet
-│   └── products.schema.json
-└── data.duckdb          # When using --format duckdb
+│   ├── products.parquet
+│   └── _schema.json
+└── lakehouse.duckdb     # When using --format duckdb
 ```
 
 ## Authentication
@@ -286,11 +286,11 @@ After syncing, load data in your local notebooks:
 import duckdb
 
 # If exported as DuckDB
-conn = duckdb.connect('.faborite/data.duckdb')
+conn = duckdb.connect('./local_lakehouse/lakehouse.duckdb')
 df = conn.execute("SELECT * FROM customers").df()
 
 # If exported as Parquet
-df = duckdb.read_parquet('.faborite/customers/data.parquet').df()
+df = duckdb.read_parquet('./local_lakehouse/customers/customers.parquet').df()
 ```
 
 ### Python with Pandas
@@ -298,7 +298,7 @@ df = duckdb.read_parquet('.faborite/customers/data.parquet').df()
 ```python
 import pandas as pd
 
-df = pd.read_parquet('.faborite/customers/data.parquet')
+df = pd.read_parquet('./local_lakehouse/customers/customers.parquet')
 ```
 
 ### Python with Polars
@@ -306,7 +306,7 @@ df = pd.read_parquet('.faborite/customers/data.parquet')
 ```python
 import polars as pl
 
-df = pl.read_parquet('.faborite/customers/data.parquet')
+df = pl.read_parquet('./local_lakehouse/customers/customers.parquet')
 ```
 
 ### .NET
@@ -314,7 +314,7 @@ df = pl.read_parquet('.faborite/customers/data.parquet')
 ```csharp
 using DuckDB.NET.Data;
 
-using var connection = new DuckDBConnection("Data Source=.faborite/data.duckdb");
+using var connection = new DuckDBConnection("Data Source=./local_lakehouse/lakehouse.duckdb");
 connection.Open();
 // Query your data...
 ```

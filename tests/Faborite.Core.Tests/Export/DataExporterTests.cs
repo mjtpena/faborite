@@ -148,18 +148,18 @@ public class DataExporterTests : IDisposable
     {
         // Arrange
         var sourcePath = CreateTestParquet(10);
-        var schemaPath = Path.Combine(_testDir, "schema.json");
-        _createdFiles.Add(schemaPath);
+        var outputDir = Path.Combine(_testDir, "schema_output");
+        var expectedSchemaPath = Path.Combine(outputDir, "test_table", "_schema.json");
 
         // Act
-        _exporter.ExportSchema(sourcePath, schemaPath, "test_table");
+        _exporter.ExportSchema(sourcePath, "test_table", outputDir);
 
         // Assert
-        File.Exists(schemaPath).Should().BeTrue();
-        var content = File.ReadAllText(schemaPath);
+        File.Exists(expectedSchemaPath).Should().BeTrue();
+        var content = File.ReadAllText(expectedSchemaPath);
         content.Should().Contain("\"tableName\"");
         content.Should().Contain("test_table");
-        content.Should().Contain("\"columns\"");
+        content.Should().Contain("\"fields\"");
         
         // Should be valid JSON
         var action = () => System.Text.Json.JsonDocument.Parse(content);

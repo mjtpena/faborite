@@ -1,0 +1,48 @@
+<Project>
+  <!-- Shared properties for all projects in the solution -->
+
+  <PropertyGroup>
+    <!-- Common metadata -->
+    <Authors>Michael John Peña</Authors>
+    <Company>DataChain Consulting</Company>
+    <Copyright>Copyright (c) 2026 Michael John Peña</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mjtpena/faborite</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mjtpena/faborite.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    
+    <!-- Version - update this for releases -->
+    <VersionPrefix>0.1.0</VersionPrefix>
+    
+    <!-- Build settings -->
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    
+    <!-- Deterministic builds for reproducibility -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    
+    <!-- Enable source link for debugging NuGet packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Package references that apply to all projects -->
+  <ItemGroup Condition="'$(IsTestProject)' != 'true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- Analyzers for code quality -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

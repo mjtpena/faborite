@@ -59,34 +59,65 @@ cd faborite
 dotnet build
 ```
 
-## Quick Start
+## Quick Start (5 minutes)
 
-### 1. Login to Azure
+### 1. Install
+
+```bash
+dotnet tool install -g Faborite
+```
+
+### 2. Login to Azure
 
 ```bash
 az login
 ```
 
-### 2. Initialize Configuration
+### 3. Get Your IDs from Fabric URL
 
-```bash
-faborite init
+Open your Lakehouse in Microsoft Fabric. The URL contains your IDs:
+
+```
+https://app.fabric.microsoft.com/groups/{WORKSPACE-ID}/lakehouses/{LAKEHOUSE-ID}
 ```
 
-Edit `faborite.json` with your workspace and lakehouse IDs.
-
-### 3. Sync Data
-
-```bash
-# Sync all tables with defaults (10,000 random rows each)
-faborite sync --workspace <workspace-id> --lakehouse <lakehouse-id>
-
-# Or use the config file
-faborite sync
+For example:
+```
+https://app.fabric.microsoft.com/groups/4bb594bc-a449-4c2a-9415-325e94f04ea4/lakehouses/16f4ae69-a9f6-409a-9c1a-09f7683715ef
+                                       └─────────────── workspace ───────────────┘            └─────────────── lakehouse ───────────────┘
 ```
 
-### 4. Use Your Data
+### 4. List Available Tables
 
+```bash
+faborite list-tables -w <workspace-id> -l <lakehouse-id>
+```
+
+### 5. Sync Data
+
+```bash
+# Sync all tables (10,000 random rows each)
+faborite sync -w <workspace-id> -l <lakehouse-id>
+
+# Sync specific table with custom row count
+faborite sync -w <workspace-id> -l <lakehouse-id> --table customers --rows 5000
+```
+
+### 6. Check Status
+
+```bash
+faborite status
+```
+
+### 7. Use Your Data
+
+```python
+import pandas as pd
+df = pd.read_parquet('./local_lakehouse/customers/customers.parquet')
+print(df.head())
+```
+
+Or with DuckDB:
 ```python
 import duckdb
 df = duckdb.read_parquet('./local_lakehouse/customers/customers.parquet').df()
@@ -327,6 +358,13 @@ connection.Open();
 
 ### Finding Your IDs
 
+The easiest way is from the **Fabric URL** when viewing your Lakehouse:
+
+```
+https://app.fabric.microsoft.com/groups/{WORKSPACE-ID}/lakehouses/{LAKEHOUSE-ID}
+```
+
+Alternatively:
 1. **Workspace ID**: Go to your Fabric workspace → Settings → Copy the Workspace ID
 2. **Lakehouse ID**: Open your Lakehouse → Settings → Copy the Lakehouse ID
 
@@ -390,11 +428,18 @@ faborite/
 ├── tests/
 │   ├── Faborite.Core.Tests/     # Core library tests
 │   └── Faborite.Cli.Tests/      # CLI tests
+├── examples/                     # Usage examples
+│   ├── basic-sync/              # Quick start example
+│   ├── advanced-config/         # Advanced configuration
+│   ├── python-notebooks/        # Python analysis scripts
+│   └── ci-cd/                   # GitHub Actions workflow
 ├── .github/
 │   └── workflows/
 │       └── ci.yml               # CI/CD pipeline
 └── Faborite.sln
 ```
+
+See the [examples/](examples/) folder for detailed usage examples.
 
 ## Roadmap
 

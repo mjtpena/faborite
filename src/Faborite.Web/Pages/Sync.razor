@@ -1,0 +1,367 @@
+@page "/sync"
+@inject FaboriteApiClient Api
+@inject SyncHubService SyncHub
+@inject AppStateService AppState
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<PageTitle>Sync - Faborite</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Sync Tables</MudText>
+
+@if (!AppState.ConnectionStatus.IsConnected)
+{
+    <MudAlert Severity="Severity.Warning">
+        Not connected to OneLake. <MudLink Href="/connect">Connect first</MudLink> to sync tables.
+    </MudAlert>
+}
+else
+{
+    <MudGrid>
+        @* Configuration Panel *@
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.h6" GutterBottom="true">Sync Configuration</MudText>
+
+                <MudStack Spacing="3">
+                    @* Table Selection *@
+                    <MudSelect T="string" Label="Tables to Sync" MultiSelection="true" @bind-SelectedValues="_selectedTables"
+                               MultiSelectionTextFunc="@(new Func<List<string>, string>(GetMultiSelectionText))"
+                               Variant="Variant.Outlined">
+                        @foreach (var table in _availableTables)
+                        {
+                            <MudSelectItem T="string" Value="@table.Name">@table.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    @* Sampling Strategy *@
+                    <MudSelect @bind-Value="_sampleStrategy" Label="Sampling Strategy" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("random")">Random</MudSelectItem>
+                        <MudSelectItem Value="@("recent")">Recent (by date)</MudSelectItem>
+                        <MudSelectItem Value="@("head")">Head (first N rows)</MudSelectItem>
+                        <MudSelectItem Value="@("tail")">Tail (last N rows)</MudSelectItem>
+                        <MudSelectItem Value="@("full")">Full (all rows)</MudSelectItem>
+                    </MudSelect>
+
+                    @* Row Count *@
+                    <div>
+                        <MudText Typo="Typo.body2" Class="mb-2">Rows per table: @_rowCount.ToString("N0")</MudText>
+                        <MudSlider @bind-Value="_rowCount" Min="100" Max="100000" Step="100" Color="Color.Primary" />
+                    </div>
+
+                    @if (_sampleStrategy == "recent")
+                    {
+                        <MudTextField @bind-Value="_dateColumn" Label="Date Column" Variant="Variant.Outlined"
+                                      HelperText="Column name for recent sampling" />
+                    }
+
+                    @* Output Format *@
+                    <MudSelect @bind-Value="_outputFormat" Label="Output Format" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("parquet")">Parquet</MudSelectItem>
+                        <MudSelectItem Value="@("csv")">CSV</MudSelectItem>
+                        <MudSelectItem Value="@("json")">JSON</MudSelectItem>
+                        <MudSelectItem Value="@("duckdb")">DuckDB</MudSelectItem>
+                    </MudSelect>
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.Sync"
+                               OnClick="StartSyncAsync" Disabled="@(_syncing || !_selectedTables.Any())">
+                        @if (_syncing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Syncing...</span>
+                        }
+                        else
+                        {
+                            <span>Start Sync</span>
+                        }
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        @* Progress Panel *@
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.h6" GutterBottom="true">Sync Progress</MudText>
+
+                @if (_currentSession == null && !_syncing)
+                {
+                    <MudAlert Severity="Severity.Info">
+                        Configure your sync settings and click "Start Sync" to begin.
+                    </MudAlert>
+                }
+                else if (_currentSession != null)
+                {
+                    <MudStack Spacing="2">
+                        @* Overall Progress *@
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText>Overall Progress</MudText>
+                            <MudText>@_currentSession.TablesCompleted / @_currentSession.TotalTables tables</MudText>
+                        </MudStack>
+                        <MudProgressLinear Value="@GetOverallProgress()" Color="@GetProgressColor()" Striped="@_syncing" />
+
+                        @* Current Table *@
+                        @if (!string.IsNullOrEmpty(_currentSession.CurrentTable))
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="syncing">
+                                Currently syncing: @_currentSession.CurrentTable
+                            </MudText>
+                        }
+
+                        @* Table List *@
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.subtitle2">Table Status</MudText>
+                        
+                        <MudList T="string" Dense="true">
+                            @foreach (var tp in _tableProgress)
+                            {
+                                <MudListItem>
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center">
+                                            <MudIcon Icon="@GetTableIcon(tp.Value.Status)" 
+                                                     Color="@GetTableColor(tp.Value.Status)" Size="Size.Small" />
+                                            <MudText>@tp.Key</MudText>
+                                        </MudStack>
+                                        <MudText Typo="Typo.caption">
+                                            @if (tp.Value.Status == "Completed")
+                                            {
+                                                @tp.Value.RowsSynced.ToString("N0")<text> rows</text>
+                                            }
+                                            else if (!string.IsNullOrEmpty(tp.Value.Error))
+                                            {
+                                                <MudText Color="Color.Error">@tp.Value.Error</MudText>
+                                            }
+                                            else
+                                            {
+                                                @tp.Value.Status
+                                            }
+                                        </MudText>
+                                    </MudStack>
+                                </MudListItem>
+                            }
+                        </MudList>
+
+                        @* Summary *@
+                        @if (_currentSession.Status == "Completed" || _currentSession.Status == "Failed")
+                        {
+                            <MudDivider Class="my-2" />
+                            <MudAlert Severity="@(_currentSession.Status == "Completed" ? Severity.Success : Severity.Error)">
+                                <MudText>
+                                    @if (_currentSession.Status == "Completed")
+                                    {
+                                        <text>Sync completed! @_currentSession.TotalRowsSynced.ToString("N0") total rows synced.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Sync failed. Check the errors above.</text>
+                                    }
+                                </MudText>
+                            </MudAlert>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/local" Class="mt-2">
+                                Browse Local Data
+                            </MudButton>
+                        }
+                    </MudStack>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private List<TableInfo> _availableTables = new();
+    private IEnumerable<string> _selectedTables = new HashSet<string>();
+    private string _sampleStrategy = "random";
+    private int _rowCount = 10000;
+    private string? _dateColumn;
+    private string _outputFormat = "parquet";
+    
+    private bool _syncing = false;
+    private string? _sessionId;
+    private SyncSession? _currentSession;
+    private Dictionary<string, TableProgress> _tableProgress = new();
+
+    [SupplyParameterFromQuery(Name = "table")]
+    public string? PreselectedTable { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load available tables
+        if (AppState.ConnectionStatus.IsConnected)
+        {
+            _availableTables = await Api.GetTablesAsync();
+            
+            if (!string.IsNullOrEmpty(PreselectedTable))
+            {
+                _selectedTables = new HashSet<string> { PreselectedTable };
+            }
+            else
+            {
+                _selectedTables = _availableTables.Select(t => t.Name).ToHashSet();
+            }
+        }
+
+        // Setup SignalR handlers
+        SyncHub.OnProgress += HandleProgress;
+        SyncHub.OnTableStarted += HandleTableStarted;
+        SyncHub.OnTableCompleted += HandleTableCompleted;
+        SyncHub.OnTableError += HandleTableError;
+        SyncHub.OnSyncCompleted += HandleSyncCompleted;
+    }
+
+    private async Task StartSyncAsync()
+    {
+        _syncing = true;
+        _tableProgress = _selectedTables.ToDictionary(t => t, t => new TableProgress { TableName = t, Status = "Pending" });
+        StateHasChanged();
+
+        try
+        {
+            var request = new SyncRequest
+            {
+                Tables = _selectedTables.ToArray(),
+                SampleConfig = new SampleConfigDto
+                {
+                    Strategy = _sampleStrategy,
+                    Rows = _rowCount,
+                    DateColumn = _dateColumn
+                },
+                FormatConfig = new FormatConfigDto
+                {
+                    Format = _outputFormat
+                }
+            };
+
+            var response = await Api.StartSyncAsync(request);
+            _sessionId = response.SessionId;
+
+            if (!string.IsNullOrEmpty(_sessionId))
+            {
+                await SyncHub.ConnectAsync();
+                await SyncHub.SubscribeToSessionAsync(_sessionId);
+                
+                _currentSession = new SyncSession
+                {
+                    SessionId = _sessionId,
+                    Status = "InProgress",
+                    TotalTables = _selectedTables.Count()
+                };
+                
+                AppState.SetActiveSyncSession(_sessionId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error starting sync: {ex.Message}", Severity.Error);
+            _syncing = false;
+        }
+    }
+
+    private void HandleProgress(SyncProgressEvent e)
+    {
+        if (_currentSession != null)
+        {
+            _currentSession.TablesCompleted = e.Current;
+            _currentSession.TotalTables = e.Total;
+            _currentSession.CurrentTable = e.TableName;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void HandleTableStarted(TableStartedEvent e)
+    {
+        if (_tableProgress.ContainsKey(e.TableName))
+        {
+            _tableProgress[e.TableName].Status = "InProgress";
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void HandleTableCompleted(TableCompletedEvent e)
+    {
+        if (_tableProgress.ContainsKey(e.TableName))
+        {
+            _tableProgress[e.TableName].Status = "Completed";
+            _tableProgress[e.TableName].RowsSynced = e.RowsSynced;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void HandleTableError(TableErrorEvent e)
+    {
+        if (_tableProgress.ContainsKey(e.TableName))
+        {
+            _tableProgress[e.TableName].Status = "Failed";
+            _tableProgress[e.TableName].Error = e.Error;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void HandleSyncCompleted(SyncCompletedEvent e)
+    {
+        if (_currentSession != null)
+        {
+            _currentSession.Status = e.Success ? "Completed" : "Failed";
+            _currentSession.TotalRowsSynced = e.TotalRows;
+            _currentSession.TablesCompleted = e.TablesCompleted;
+        }
+        _syncing = false;
+        AppState.SetActiveSyncSession(null);
+        InvokeAsync(StateHasChanged);
+        
+        Snackbar.Add(e.Success ? "Sync completed successfully!" : "Sync completed with errors", 
+                     e.Success ? Severity.Success : Severity.Warning);
+    }
+
+    private string GetMultiSelectionText(List<string> selected)
+    {
+        if (selected.Count == 0) return "Select tables";
+        if (selected.Count == _availableTables.Count) return "All tables";
+        return $"{selected.Count} table(s) selected";
+    }
+
+    private double GetOverallProgress()
+    {
+        if (_currentSession == null || _currentSession.TotalTables == 0) return 0;
+        return (double)_currentSession.TablesCompleted / _currentSession.TotalTables * 100;
+    }
+
+    private Color GetProgressColor() => _currentSession?.Status switch
+    {
+        "Completed" => Color.Success,
+        "Failed" => Color.Error,
+        _ => Color.Primary
+    };
+
+    private string GetTableIcon(string status) => status switch
+    {
+        "Completed" => Icons.Material.Filled.CheckCircle,
+        "Failed" => Icons.Material.Filled.Error,
+        "InProgress" => Icons.Material.Filled.Sync,
+        _ => Icons.Material.Filled.Schedule
+    };
+
+    private Color GetTableColor(string status) => status switch
+    {
+        "Completed" => Color.Success,
+        "Failed" => Color.Error,
+        "InProgress" => Color.Info,
+        _ => Color.Default
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        SyncHub.OnProgress -= HandleProgress;
+        SyncHub.OnTableStarted -= HandleTableStarted;
+        SyncHub.OnTableCompleted -= HandleTableCompleted;
+        SyncHub.OnTableError -= HandleTableError;
+        SyncHub.OnSyncCompleted -= HandleSyncCompleted;
+
+        if (!string.IsNullOrEmpty(_sessionId))
+        {
+            await SyncHub.UnsubscribeFromSessionAsync(_sessionId);
+        }
+    }
+}

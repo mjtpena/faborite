@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: src/Faborite.Api/Dockerfile
+    container_name: faborite-api
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      # Azure authentication (optional - provide your own)
+      # - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      # - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      # - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+    volumes:
+      - ./local_lakehouse:/app/local_lakehouse
+      - ./logs:/app/logs
+    networks:
+      - faborite-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: src/Faborite.Web/Dockerfile
+    container_name: faborite-web
+    ports:
+      - "5002:80"
+    environment:
+      - ApiBaseUrl=http://api:8080
+    depends_on:
+      - api
+    networks:
+      - faborite-network
+
+networks:
+  faborite-network:
+    driver: bridge
+
+volumes:
+  lakehouse-data:

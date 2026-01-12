@@ -123,6 +123,193 @@ import duckdb
 df = duckdb.read_parquet('./local_lakehouse/customers/customers.parquet').df()
 ```
 
+## Architecture
+
+Faborite provides three ways to sync your Fabric data:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Microsoft Fabric                       │
+│                     (OneLake)                            │
+└────────────────────┬────────────────────────────────────┘
+                     │
+        ┌────────────┼────────────┬──────────────────┐
+        │            │            │                  │
+   ┌────▼────┐  ┌────▼────┐  ┌───▼────┐      ┌──────▼───────┐
+   │   CLI   │  │   API   │  │   Web  │      │  Your Apps   │
+   │  Tool   │  │ (REST)  │  │  (UI)  │      │ (Notebooks)  │
+   └────┬────┘  └────┬────┘  └───┬────┘      └──────┬───────┘
+        │            │            │                  │
+        └────────────┼────────────┴──────────────────┘
+                     │
+              ┌──────▼───────┐
+              │ Faborite.Core│
+              │   (Library)  │
+              └──────┬───────┘
+                     │
+              ┌──────▼───────┐
+              │   DuckDB     │
+              │  (Sampling)  │
+              └──────┬───────┘
+                     │
+              ┌──────▼───────────────────────────┐
+              │    Local Storage                  │
+              │  (Parquet, CSV, JSON, DuckDB)    │
+              └───────────────────────────────────┘
+```
+
+### Components
+
+| Component | Description | Use Case |
+|-----------|-------------|----------|
+| **CLI** | Command-line tool | Developer workstations, CI/CD pipelines |
+| **API** | REST API + SignalR | Backend services, custom integrations |
+| **Web UI** | Blazor WebAssembly | Visual management, team collaboration |
+| **Core Library** | Reusable .NET library | Embedded in your applications |
+
+## API (REST + SignalR)
+
+### Running the API
+
+```bash
+# Run from source
+cd src/Faborite.Api
+dotnet run
+
+# Or use Docker
+docker-compose up api
+
+# Access Swagger UI at: http://localhost:5001/swagger
+```
+
+### Key Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/connect` | POST | Connect to Fabric workspace |
+| `/api/auth/status` | GET | Check connection status |
+| `/api/tables` | GET | List available tables |
+| `/api/sync/start` | POST | Start sync operation |
+| `/api/sync/status/{id}` | GET | Get sync progress |
+| `/api/local` | GET | Browse local synced data |
+| `/api/config` | GET/PUT | Manage configuration |
+| `/health/live` | GET | Liveness probe |
+| `/health/ready` | GET | Readiness probe |
+
+### Example: Connect and Sync via API
+
+```bash
+# Connect to workspace
+curl -X POST http://localhost:5001/api/auth/connect \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workspaceId": "your-workspace-id",
+    "lakehouseId": "your-lakehouse-id",
+    "authMethod": "Default"
+  }'
+
+# Start sync
+curl -X POST http://localhost:5001/api/sync/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tables": ["customers", "orders"],
+    "sampleConfig": {
+      "strategy": "random",
+      "rows": 5000
+    }
+  }'
+```
+
+### SignalR Real-Time Updates
+
+Connect to `/hubs/sync` for real-time sync progress:
+
+```javascript
+const connection = new signalR.HubConnectionBuilder()
+    .withUrl("http://localhost:5001/hubs/sync")
+    .build();
+
+connection.on("SyncProgress", (data) => {
+    console.log(`${data.tableName}: ${data.progress}%`);
+});
+
+await connection.start();
+```
+
+## Web UI (Blazor WebAssembly)
+
+### Running the Web UI
+
+```bash
+# Run from source
+cd src/Faborite.Web
+dotnet run
+
+# Or use Docker
+docker-compose up web
+
+# Access at: http://localhost:5002
+```
+
+### Features
+
+- **Visual Connection** - Connect to workspaces/lakehouses without CLI
+- **Table Browser** - Browse tables with metadata
+- **Interactive Sync** - Configure and monitor syncs visually
+- **Real-Time Progress** - Live sync progress with SignalR
+- **Local Data Explorer** - Query and preview synced data
+- **Configuration Editor** - Visual JSON config editor with Monaco
+- **Sync History** - Track past sync operations
+
+### Configuration
+
+Set the API base URL in `appsettings.json`:
+
+```json
+{
+  "ApiBaseUrl": "http://localhost:5001"
+}
+```
+
+## Docker Deployment
+
+### Quick Start with Docker Compose
+
+```bash
+# Start both API and Web UI
+docker-compose up -d
+
+# API: http://localhost:5001
+# Web: http://localhost:5002
+# Swagger: http://localhost:5001/swagger
+```
+
+### Individual Containers
+
+```bash
+# Build and run API
+docker build -f src/Faborite.Api/Dockerfile -t faborite-api .
+docker run -p 5001:8080 faborite-api
+
+# Build and run Web
+docker build -f src/Faborite.Web/Dockerfile -t faborite-web .
+docker run -p 5002:80 faborite-web
+```
+
+### Environment Variables
+
+```bash
+# Azure authentication
+AZURE_TENANT_ID=your-tenant-id
+AZURE_CLIENT_ID=your-client-id
+AZURE_CLIENT_SECRET=your-client-secret
+
+# Faborite configuration
+FABORITE_WORKSPACE_ID=your-workspace-id
+FABORITE_LAKEHOUSE_ID=your-lakehouse-id
+FABORITE_OUTPUT_PATH=/app/local_lakehouse
+```
+
 ## CLI Reference
 
 ### `sync`

@@ -1,0 +1,59 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test results
+**/TestResults/
+**/*.trx
+**/coverage/
+
+# Local data
+local_lakehouse/
+*.duckdb
+*.parquet
+*.csv
+*.json
+!faborite.json
+!appsettings.json
+!**/appsettings.*.json
+
+# Logs
+logs/
+*.log
+
+# Environment files
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# Python (for examples)
+.venv/
+__pycache__/
+*.pyc
+
+# Node (if any)
+node_modules/

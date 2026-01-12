@@ -1,0 +1,27 @@
+@inject AppStateService AppState
+
+<div class="connection-status">
+    <div class="status-dot @(AppState.ConnectionStatus.IsConnected ? "connected" : "disconnected")"></div>
+    <MudText Typo="Typo.caption">
+        @if (AppState.ConnectionStatus.IsConnected)
+        {
+            <text>Connected</text>
+        }
+        else
+        {
+            <text>Disconnected</text>
+        }
+    </MudText>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        AppState.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        AppState.OnChange -= StateHasChanged;
+    }
+}

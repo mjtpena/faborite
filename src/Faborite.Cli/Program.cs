@@ -28,6 +28,12 @@ app.Configure(config =>
         .WithDescription("Show status of locally synced data")
         .WithExample(new[] { "status" })
         .WithExample(new[] { "status", "-p", "./my_lakehouse" });
+
+    config.AddCommand<UiCommand>("ui")
+        .WithDescription("Launch the web-based UI for Faborite")
+        .WithExample(new[] { "ui" })
+        .WithExample(new[] { "ui", "--port", "5000" })
+        .WithExample(new[] { "ui", "--no-browser" });
 });
 
 return await app.RunAsync(args);

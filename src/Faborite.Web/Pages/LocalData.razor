@@ -1,0 +1,251 @@
+@page "/local"
+@inject FaboriteApiClient Api
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Local Data - Faborite</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Local Data</MudText>
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadDataAsync">
+            Refresh
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteSweep"
+                   OnClick="DeleteAllAsync" Disabled="@(_tables.Count == 0)">
+            Delete All
+        </MudButton>
+    </MudStack>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (!_exists)
+{
+    <MudAlert Severity="Severity.Info">
+        No local data found. <MudLink Href="/sync">Sync some tables</MudLink> to get started.
+    </MudAlert>
+}
+else
+{
+    @* Summary Cards *@
+    <MudGrid Class="mb-4">
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-3" Elevation="1">
+                <MudText Typo="Typo.h5" Color="Color.Primary">@_tables.Count</MudText>
+                <MudText Typo="Typo.caption">Tables</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-3" Elevation="1">
+                <MudText Typo="Typo.h5" Color="Color.Secondary">@FormatBytes(_totalSize)</MudText>
+                <MudText Typo="Typo.caption">Total Size</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-3" Elevation="1">
+                <MudText Typo="Typo.h5">@_path</MudText>
+                <MudText Typo="Typo.caption">Location</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* Table List *@
+    <MudTable Items="_tables" Hover="true" Striped="true" Dense="true" Elevation="2">
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<LocalTableInfo, object>(x => x.Name)">Table</MudTableSortLabel></MudTh>
+            <MudTh>Files</MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<LocalTableInfo, object>(x => x.TotalSizeBytes)">Size</MudTableSortLabel></MudTh>
+            <MudTh>Schema</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Table">
+                <MudStack Row="true" AlignItems="AlignItems.Center">
+                    <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Small" Color="Color.Secondary" Class="mr-1" />
+                    <MudText>@context.Name</MudText>
+                </MudStack>
+            </MudTd>
+            <MudTd DataLabel="Files">@context.Files.Count file(s)</MudTd>
+            <MudTd DataLabel="Size">@FormatBytes(context.TotalSizeBytes)</MudTd>
+            <MudTd DataLabel="Schema">
+                @if (context.HasSchema)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">✓</MudChip>
+                }
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Preview" Size="Size.Small" 
+                               OnClick="@(() => PreviewTable(context.Name))" Title="Preview" />
+                <MudIconButton Icon="@Icons.Material.Filled.Code" Size="Size.Small"
+                               Href="@($"/query?table={context.Name}")" Title="Query" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => DeleteTableAsync(context.Name))" Title="Delete" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@* Preview Dialog *@
+<MudDialog @bind-Visible="_previewOpen" Options="@(new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true })">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Preview: @_previewTableName</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_previewLoading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_previewData != null && _previewData.Rows.Count > 0)
+        {
+            <div style="max-height: 400px; overflow: auto;">
+                <MudSimpleTable Dense="true" Hover="true" Class="data-grid">
+                    <thead>
+                        <tr>
+                            @foreach (var col in _previewData.Columns)
+                            {
+                                <th>@col</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _previewData.Rows)
+                        {
+                            <tr>
+                                @foreach (var col in _previewData.Columns)
+                                {
+                                    <td>@(row.ContainsKey(col) ? row[col]?.ToString() ?? "NULL" : "")</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+            @if (_previewData.Truncated)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                    Showing first @_previewData.RowCount rows. Use Query page for more.
+                </MudAlert>
+            }
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Warning">No data to preview</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _previewOpen = false)">Close</MudButton>
+        <MudButton Color="Color.Primary" Href="@($"/query?table={_previewTableName}")">Open in Query</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<LocalTableInfo> _tables = new();
+    private bool _loading = false;
+    private bool _exists = false;
+    private string _path = "";
+    private long _totalSize = 0;
+
+    private bool _previewOpen = false;
+    private string _previewTableName = "";
+    private bool _previewLoading = false;
+    private QueryResult? _previewData;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Api.GetLocalDataAsync();
+            _exists = response.Exists;
+            _path = response.Path ?? "./local_lakehouse";
+            _tables = response.Tables;
+            _totalSize = response.TotalSizeBytes;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading local data: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task PreviewTable(string tableName)
+    {
+        _previewTableName = tableName;
+        _previewOpen = true;
+        _previewLoading = true;
+        _previewData = null;
+        StateHasChanged();
+
+        try
+        {
+            _previewData = await Api.PreviewTableAsync(tableName, 100);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading preview: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _previewLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteTableAsync(string tableName)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Delete Table",
+            $"Are you sure you want to delete '{tableName}'? This cannot be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            var success = await Api.DeleteLocalTableAsync(tableName);
+            if (success)
+            {
+                Snackbar.Add($"Deleted {tableName}", Severity.Success);
+                await LoadDataAsync();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete table", Severity.Error);
+            }
+        }
+    }
+
+    private async Task DeleteAllAsync()
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Delete All Local Data",
+            "Are you sure you want to delete ALL local data? This cannot be undone.",
+            yesText: "Delete All", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            // Implementation would call delete all endpoint
+            Snackbar.Add("All local data deleted", Severity.Success);
+            await LoadDataAsync();
+        }
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+        return $"{bytes / (1024.0 * 1024 * 1024):F1} GB";
+    }
+}

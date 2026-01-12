@@ -1,0 +1,199 @@
+@page "/"
+@inject FaboriteApiClient Api
+@inject AppStateService AppState
+@inject NavigationManager Navigation
+
+<PageTitle>Dashboard - Faborite</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Dashboard</MudText>
+
+<MudGrid>
+    @* Connection Status Card *@
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent Class="stat-card">
+                <MudIcon Icon="@(AppState.ConnectionStatus.IsConnected ? Icons.Material.Filled.CloudDone : Icons.Material.Filled.CloudOff)" 
+                         Color="@(AppState.ConnectionStatus.IsConnected ? Color.Success : Color.Error)" 
+                         Size="Size.Large" />
+                <div class="stat-value">@(AppState.ConnectionStatus.IsConnected ? "Connected" : "Offline")</div>
+                <div class="stat-label">OneLake Status</div>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/connect">
+                    @(AppState.ConnectionStatus.IsConnected ? "Manage" : "Connect")
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    @* Tables Count *@
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent Class="stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.TableChart" Color="Color.Primary" Size="Size.Large" />
+                <div class="stat-value">@_tableCount</div>
+                <div class="stat-label">Remote Tables</div>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/tables">Browse</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    @* Local Tables *@
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent Class="stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.Folder" Color="Color.Secondary" Size="Size.Large" />
+                <div class="stat-value">@_localTableCount</div>
+                <div class="stat-label">Local Tables</div>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/local">Browse</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    @* Storage Used *@
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent Class="stat-card">
+                <MudIcon Icon="@Icons.Material.Filled.Storage" Color="Color.Info" Size="Size.Large" />
+                <div class="stat-value">@FormatBytes(_localSizeBytes)</div>
+                <div class="stat-label">Local Storage</div>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/local">Manage</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@* Quick Actions *@
+<MudPaper Class="pa-4 mt-4" Elevation="1">
+    <MudText Typo="Typo.h6" GutterBottom="true">Quick Actions</MudText>
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Sync" 
+                   Href="/sync" Disabled="@(!AppState.ConnectionStatus.IsConnected)">
+            Sync Tables
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Code" 
+                   Href="/query" Disabled="@(_localTableCount == 0)">
+            Query Data
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Settings" 
+                   Href="/config">
+            Edit Config
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+@* Recent Sync History *@
+<MudPaper Class="pa-4 mt-4" Elevation="1">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h6">Recent Activity</MudText>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/history">View All</MudButton>
+    </MudStack>
+    
+    @if (_recentSessions.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-2">
+            No sync activity yet. <MudLink Href="/sync">Start your first sync</MudLink>
+        </MudAlert>
+    }
+    else
+    {
+        <MudList T="SyncSession" Dense="true">
+            @foreach (var session in _recentSessions.Take(5))
+            {
+                <MudListItem Class="@GetHistoryItemClass(session)">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudStack>
+                            <MudText Typo="Typo.body1">
+                                <MudIcon Icon="@GetStatusIcon(session.Status)" Color="@GetStatusColor(session.Status)" Size="Size.Small" Class="mr-1" />
+                                @session.TablesCompleted tables synced
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @session.TotalRowsSynced.ToString("N0") rows • @session.StartTime.ToLocalTime().ToString("g")
+                            </MudText>
+                        </MudStack>
+                        <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(session.Status)">@session.Status</MudChip>
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
+    }
+</MudPaper>
+
+@code {
+    private int _tableCount = 0;
+    private int _localTableCount = 0;
+    private long _localSizeBytes = 0;
+    private List<SyncSession> _recentSessions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardDataAsync();
+    }
+
+    private async Task LoadDashboardDataAsync()
+    {
+        try
+        {
+            // Check connection
+            var status = await Api.GetConnectionStatusAsync();
+            AppState.SetConnectionStatus(status);
+
+            // Get table count if connected
+            if (status.IsConnected)
+            {
+                var tables = await Api.GetTablesAsync();
+                _tableCount = tables.Count;
+            }
+
+            // Get local data info
+            var localData = await Api.GetLocalDataAsync();
+            _localTableCount = localData.TotalTables;
+            _localSizeBytes = localData.TotalSizeBytes;
+
+            // Get recent sync history
+            _recentSessions = await Api.GetSyncHistoryAsync(5);
+        }
+        catch
+        {
+            // Handle errors gracefully
+        }
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+        return $"{bytes / (1024.0 * 1024 * 1024):F1} GB";
+    }
+
+    private string GetStatusIcon(string status) => status switch
+    {
+        "Completed" => Icons.Material.Filled.CheckCircle,
+        "Failed" => Icons.Material.Filled.Error,
+        "InProgress" => Icons.Material.Filled.Sync,
+        _ => Icons.Material.Filled.Schedule
+    };
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "Completed" => Color.Success,
+        "Failed" => Color.Error,
+        "InProgress" => Color.Info,
+        _ => Color.Default
+    };
+
+    private string GetHistoryItemClass(SyncSession session)
+    {
+        var baseClass = "sync-history-item";
+        if (session.Status == "Completed") return $"{baseClass} success";
+        if (session.Status == "Failed") return $"{baseClass} failed";
+        return baseClass;
+    }
+}

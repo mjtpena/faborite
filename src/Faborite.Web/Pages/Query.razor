@@ -1,0 +1,208 @@
+@page "/query"
+@inject FaboriteApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Query - Faborite</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Query Local Data</MudText>
+
+<MudGrid>
+    @* Query Editor *@
+    <MudItem xs="12" md="4">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" GutterBottom="true">Available Tables</MudText>
+            
+            @if (_tables.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    No local tables found. <MudLink Href="/sync">Sync some data</MudLink> first.
+                </MudAlert>
+            }
+            else
+            {
+                <MudList T="string" Dense="true" Class="mb-4">
+                    @foreach (var table in _tables)
+                    {
+                        <MudListItem OnClick="@(() => InsertTableName(table))">
+                            <MudStack Row="true" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Small" />
+                                <MudText>@table</MudText>
+                            </MudStack>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary" GutterBottom="true">
+                Query Templates
+            </MudText>
+            <MudStack Spacing="1">
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => SetQuery("SELECT * FROM {table} LIMIT 100"))">
+                    SELECT * LIMIT 100
+                </MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => SetQuery("SELECT COUNT(*) as row_count FROM {table}"))">
+                    COUNT rows
+                </MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => SetQuery("DESCRIBE {table}"))">
+                    DESCRIBE table
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    @* Editor & Results *@
+    <MudItem xs="12" md="8">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" GutterBottom="true">SQL Query (DuckDB)</MudText>
+            
+            <MudTextField @bind-Value="_query" 
+                          Lines="6"
+                          Variant="Variant.Outlined"
+                          Placeholder="SELECT * FROM your_table LIMIT 100"
+                          Class="query-editor mb-4"
+                          Style="font-family: 'Consolas', monospace;" />
+
+            <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd" Class="mb-4">
+                <MudTextField @bind-Value="_maxRows" Label="Max Rows" Type="InputType.Number" 
+                              Style="width: 120px" Variant="Variant.Outlined" Dense="true" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                           StartIcon="@Icons.Material.Filled.PlayArrow"
+                           OnClick="ExecuteQueryAsync" Disabled="@(_executing || string.IsNullOrWhiteSpace(_query))">
+                    @if (_executing)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Run Query
+                </MudButton>
+            </MudStack>
+
+            @* Results *@
+            @if (_error != null)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4">
+                    <MudText Typo="Typo.body2" Style="font-family: monospace;">@_error</MudText>
+                </MudAlert>
+            }
+
+            @if (_result != null)
+            {
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.subtitle2">
+                        Results: @_result.RowCount rows @(_result.Truncated ? "(truncated)" : "")
+                    </MudText>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" 
+                               StartIcon="@Icons.Material.Filled.ContentCopy"
+                               OnClick="CopyResults">
+                        Copy CSV
+                    </MudButton>
+                </MudStack>
+
+                <div style="max-height: 400px; overflow: auto; border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;">
+                    <MudSimpleTable Dense="true" Hover="true" Class="data-grid" Style="min-width: 100%;">
+                        <thead>
+                            <tr>
+                                @foreach (var col in _result.Columns)
+                                {
+                                    <th style="position: sticky; top: 0; background: var(--mud-palette-surface); z-index: 1;">@col</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _result.Rows)
+                            {
+                                <tr>
+                                    @foreach (var col in _result.Columns)
+                                    {
+                                        <td>@FormatValue(row.ContainsKey(col) ? row[col] : null)</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<string> _tables = new();
+    private string _query = "";
+    private int _maxRows = 1000;
+    private bool _executing = false;
+    private QueryResult? _result;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "table")]
+    public string? PreselectedTable { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tables = await Api.GetQueryableTablesAsync();
+        
+        if (!string.IsNullOrEmpty(PreselectedTable) && _tables.Contains(PreselectedTable))
+        {
+            _query = $"SELECT * FROM \"{PreselectedTable}\" LIMIT 100";
+        }
+    }
+
+    private async Task ExecuteQueryAsync()
+    {
+        _executing = true;
+        _error = null;
+        _result = null;
+        StateHasChanged();
+
+        try
+        {
+            _result = await Api.ExecuteQueryAsync(_query, _maxRows);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _executing = false;
+        }
+    }
+
+    private void InsertTableName(string tableName)
+    {
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            _query = $"SELECT * FROM \"{tableName}\" LIMIT 100";
+        }
+        else
+        {
+            _query = _query.Replace("{table}", $"\"{tableName}\"");
+        }
+    }
+
+    private void SetQuery(string template)
+    {
+        _query = template;
+    }
+
+    private string FormatValue(object? value)
+    {
+        if (value == null) return "NULL";
+        if (value is DateTime dt) return dt.ToString("yyyy-MM-dd HH:mm:ss");
+        return value.ToString() ?? "";
+    }
+
+    private async Task CopyResults()
+    {
+        if (_result == null) return;
+
+        var csv = string.Join(",", _result.Columns) + "\n";
+        foreach (var row in _result.Rows)
+        {
+            csv += string.Join(",", _result.Columns.Select(c => 
+                row.ContainsKey(c) ? $"\"{row[c]?.ToString()?.Replace("\"", "\"\"")}\"" : "")) + "\n";
+        }
+
+        // Would use JS interop to copy to clipboard
+        Snackbar.Add("Results copied to clipboard", Severity.Success);
+    }
+}

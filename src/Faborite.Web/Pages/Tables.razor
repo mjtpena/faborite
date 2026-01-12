@@ -1,0 +1,170 @@
+@page "/tables"
+@inject FaboriteApiClient Api
+@inject AppStateService AppState
+@inject ISnackbar Snackbar
+
+<PageTitle>Tables - Faborite</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Remote Tables</MudText>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadTablesAsync">
+        Refresh
+    </MudButton>
+</MudStack>
+
+@if (!AppState.ConnectionStatus.IsConnected)
+{
+    <MudAlert Severity="Severity.Warning">
+        Not connected to OneLake. <MudLink Href="/connect">Connect first</MudLink> to browse tables.
+    </MudAlert>
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudText Typo="Typo.body1" Class="mt-2">Loading tables...</MudText>
+}
+else if (_tables.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        No tables found in this lakehouse.
+    </MudAlert>
+}
+else
+{
+    <MudTextField @bind-Value="_searchText" Placeholder="Search tables..." 
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="true" Class="mb-4" />
+
+    <MudTable Items="FilteredTables" Hover="true" Striped="true" Dense="true" Elevation="2"
+              OnRowClick="@((TableRowClickEventArgs<TableInfo> args) => SelectTable(args.Item))">
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<TableInfo, object>(x => x.Name)">Name</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<TableInfo, object>(x => x.Format)">Format</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<TableInfo, object>(x => x.RowCount ?? 0)">Rows</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<TableInfo, object>(x => x.SizeBytes ?? 0)">Size</MudTableSortLabel></MudTh>
+            <MudTh>Columns</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">
+                <MudStack Row="true" AlignItems="AlignItems.Center">
+                    <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Small" Class="mr-1" />
+                    <MudText>@context.Name</MudText>
+                </MudStack>
+            </MudTd>
+            <MudTd DataLabel="Format">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.Format</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Rows">@(context.RowCount?.ToString("N0") ?? "-")</MudTd>
+            <MudTd DataLabel="Size">@FormatBytes(context.SizeBytes ?? 0)</MudTd>
+            <MudTd DataLabel="Columns">@(context.Columns?.Count ?? 0)</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" 
+                               OnClick="@(() => SelectTable(context))" Title="View Schema" />
+                <MudIconButton Icon="@Icons.Material.Filled.Sync" Size="Size.Small" 
+                               Href="@($"/sync?table={context.Name}")" Title="Sync Table" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@* Schema Drawer *@
+<MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.End" Width="400px" Elevation="2">
+    @if (_selectedTable != null)
+    {
+        <MudDrawerHeader>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="width: 100%">
+                <MudText Typo="Typo.h6">@_selectedTable.Name</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => _drawerOpen = false)" />
+            </MudStack>
+        </MudDrawerHeader>
+        <MudDrawerContainer Class="pa-4">
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary" GutterBottom="true">Table Info</MudText>
+            <MudSimpleTable Dense="true" Class="mb-4">
+                <tbody>
+                    <tr><td>Format</td><td>@_selectedTable.Format</td></tr>
+                    <tr><td>Rows</td><td>@(_selectedTable.RowCount?.ToString("N0") ?? "Unknown")</td></tr>
+                    <tr><td>Size</td><td>@FormatBytes(_selectedTable.SizeBytes ?? 0)</td></tr>
+                </tbody>
+            </MudSimpleTable>
+
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary" GutterBottom="true">
+                Columns (@(_selectedTable.Columns?.Count ?? 0))
+            </MudText>
+            
+            @if (_selectedTable.Columns != null)
+            {
+                <MudTable Items="_selectedTable.Columns" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh>Name</MudTh>
+                        <MudTh>Type</MudTh>
+                        <MudTh>Null</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Name</MudTd>
+                        <MudTd><MudChip T="string" Size="Size.Small">@context.Type</MudChip></MudTd>
+                        <MudTd>@(context.Nullable ? "✓" : "")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-4"
+                       Href="@($"/sync?table={_selectedTable.Name}")">
+                Sync This Table
+            </MudButton>
+        </MudDrawerContainer>
+    }
+</MudDrawer>
+
+@code {
+    private List<TableInfo> _tables = new();
+    private bool _loading = false;
+    private string _searchText = "";
+    private bool _drawerOpen = false;
+    private TableInfo? _selectedTable;
+
+    private IEnumerable<TableInfo> FilteredTables => string.IsNullOrWhiteSpace(_searchText)
+        ? _tables
+        : _tables.Where(t => t.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTablesAsync();
+    }
+
+    private async Task LoadTablesAsync()
+    {
+        if (!AppState.ConnectionStatus.IsConnected)
+            return;
+
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            _tables = await Api.GetTablesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading tables: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SelectTable(TableInfo table)
+    {
+        _selectedTable = table;
+        _drawerOpen = true;
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+        return $"{bytes / (1024.0 * 1024 * 1024):F1} GB";
+    }
+}

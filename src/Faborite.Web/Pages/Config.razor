@@ -1,0 +1,301 @@
+@page "/config"
+@inject FaboriteApiClient Api
+@inject ISnackbar Snackbar
+@using System.Text.Json
+
+<PageTitle>Configuration - Faborite</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Configuration</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                <MudText Typo="Typo.h6">faborite.json</MudText>
+                <MudStack Row="true" Spacing="1">
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadConfigAsync" Title="Reload" />
+                    <MudIconButton Icon="@Icons.Material.Filled.RestartAlt" OnClick="ResetToDefault" Title="Reset to Default" />
+                </MudStack>
+            </MudStack>
+
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else
+            {
+                <MudTextField @bind-Value="_configJson" 
+                              Lines="20"
+                              Variant="Variant.Outlined"
+                              Style="font-family: 'Consolas', monospace; font-size: 0.85rem;"
+                              Class="monaco-container" />
+
+                @if (_validationErrors.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-2">
+                        <MudText Typo="Typo.subtitle2">Validation Errors:</MudText>
+                        <ul>
+                            @foreach (var error in _validationErrors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </MudAlert>
+                }
+
+                <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
+                    <MudButton Variant="Variant.Outlined" OnClick="ValidateConfigAsync">
+                        Validate
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                               OnClick="SaveConfigAsync" Disabled="@(_validationErrors.Count > 0)">
+                        Save
+                    </MudButton>
+                </MudStack>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        @* Visual Editor *@
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" GutterBottom="true">Visual Editor</MudText>
+
+            <MudExpansionPanels MultiExpansion="true">
+                @* Connection *@
+                <MudExpansionPanel Text="Connection" IsInitiallyExpanded="true">
+                    <MudStack Spacing="2">
+                        <MudTextField @bind-Value="_config.WorkspaceId" Label="Workspace ID" Variant="Variant.Outlined" />
+                        <MudTextField @bind-Value="_config.LakehouseId" Label="Lakehouse ID" Variant="Variant.Outlined" />
+                    </MudStack>
+                </MudExpansionPanel>
+
+                @* Sampling *@
+                <MudExpansionPanel Text="Sampling">
+                    <MudStack Spacing="2">
+                        <MudSelect @bind-Value="_config.Sample.Strategy" Label="Strategy" Variant="Variant.Outlined">
+                            <MudSelectItem Value="@("random")">Random</MudSelectItem>
+                            <MudSelectItem Value="@("recent")">Recent</MudSelectItem>
+                            <MudSelectItem Value="@("head")">Head</MudSelectItem>
+                            <MudSelectItem Value="@("tail")">Tail</MudSelectItem>
+                            <MudSelectItem Value="@("full")">Full</MudSelectItem>
+                        </MudSelect>
+                        <MudNumericField @bind-Value="_config.Sample.Rows" Label="Rows" Variant="Variant.Outlined" 
+                                        Min="100" Max="1000000" />
+                        <MudTextField @bind-Value="_config.Sample.DateColumn" Label="Date Column (for recent)" 
+                                      Variant="Variant.Outlined" />
+                        <MudNumericField @bind-Value="_config.Sample.Seed" Label="Random Seed" Variant="Variant.Outlined" />
+                    </MudStack>
+                </MudExpansionPanel>
+
+                @* Format *@
+                <MudExpansionPanel Text="Output Format">
+                    <MudStack Spacing="2">
+                        <MudSelect @bind-Value="_config.Format.Format" Label="Format" Variant="Variant.Outlined">
+                            <MudSelectItem Value="@("parquet")">Parquet</MudSelectItem>
+                            <MudSelectItem Value="@("csv")">CSV</MudSelectItem>
+                            <MudSelectItem Value="@("json")">JSON</MudSelectItem>
+                            <MudSelectItem Value="@("duckdb")">DuckDB</MudSelectItem>
+                        </MudSelect>
+                        <MudSelect @bind-Value="_config.Format.Compression" Label="Compression" Variant="Variant.Outlined">
+                            <MudSelectItem Value="@("snappy")">Snappy</MudSelectItem>
+                            <MudSelectItem Value="@("gzip")">GZip</MudSelectItem>
+                            <MudSelectItem Value="@("none")">None</MudSelectItem>
+                        </MudSelect>
+                        <MudSwitch @bind-Value="_config.Format.SingleFile" Label="Single File" Color="Color.Primary" />
+                    </MudStack>
+                </MudExpansionPanel>
+
+                @* Sync Settings *@
+                <MudExpansionPanel Text="Sync Settings">
+                    <MudStack Spacing="2">
+                        <MudTextField @bind-Value="_config.Sync.LocalPath" Label="Local Path" Variant="Variant.Outlined" />
+                        <MudNumericField @bind-Value="_config.Sync.ParallelTables" Label="Parallel Tables" 
+                                        Variant="Variant.Outlined" Min="1" Max="10" />
+                        <MudSwitch @bind-Value="_config.Sync.Overwrite" Label="Overwrite Existing" Color="Color.Primary" />
+                        <MudSwitch @bind-Value="_config.Sync.IncludeSchema" Label="Include Schema" Color="Color.Primary" />
+                    </MudStack>
+                </MudExpansionPanel>
+
+                @* Auth *@
+                <MudExpansionPanel Text="Authentication">
+                    <MudStack Spacing="2">
+                        <MudSelect @bind-Value="_config.Auth.Method" Label="Method" Variant="Variant.Outlined">
+                            <MudSelectItem Value="@("Default")">Default</MudSelectItem>
+                            <MudSelectItem Value="@("AzureCli")">Azure CLI</MudSelectItem>
+                            <MudSelectItem Value="@("ManagedIdentity")">Managed Identity</MudSelectItem>
+                            <MudSelectItem Value="@("ServicePrincipal")">Service Principal</MudSelectItem>
+                        </MudSelect>
+                        @if (_config.Auth.Method == "ServicePrincipal")
+                        {
+                            <MudTextField @bind-Value="_config.Auth.TenantId" Label="Tenant ID" Variant="Variant.Outlined" />
+                            <MudTextField @bind-Value="_config.Auth.ClientId" Label="Client ID" Variant="Variant.Outlined" />
+                            <MudTextField @bind-Value="_config.Auth.ClientSecret" Label="Client Secret" 
+                                          InputType="InputType.Password" Variant="Variant.Outlined" />
+                        }
+                    </MudStack>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true" Class="mt-4"
+                       OnClick="ApplyVisualEditorChanges">
+                Apply to JSON
+            </MudButton>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _loading = false;
+    private string _configJson = "";
+    private string _configPath = "";
+    private FaboriteConfig _config = new();
+    private List<string> _validationErrors = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadConfigAsync();
+    }
+
+    private async Task LoadConfigAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Api.GetConfigAsync();
+            _configPath = response.Path ?? "faborite.json";
+            
+            if (response.Config != null)
+            {
+                _config = response.Config;
+                _configJson = JsonSerializer.Serialize(_config, new JsonSerializerOptions 
+                { 
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+            }
+            else
+            {
+                await ResetToDefault();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading config: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ResetToDefault()
+    {
+        _config = new FaboriteConfig
+        {
+            WorkspaceId = "your-workspace-guid",
+            LakehouseId = "your-lakehouse-guid",
+            Sample = new SampleConfig
+            {
+                Strategy = "random",
+                Rows = 10000,
+                Seed = 42,
+                AutoDetectDate = true,
+                MaxFullTableRows = 50000
+            },
+            Format = new FormatConfig
+            {
+                Format = "parquet",
+                Compression = "snappy",
+                SingleFile = true
+            },
+            Sync = new SyncConfig
+            {
+                LocalPath = "./local_lakehouse",
+                Overwrite = true,
+                IncludeSchema = true,
+                ParallelTables = 4
+            },
+            Auth = new AuthConfig
+            {
+                Method = "Default"
+            }
+        };
+
+        _configJson = JsonSerializer.Serialize(_config, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        _validationErrors.Clear();
+        await Task.CompletedTask;
+    }
+
+    private async Task ValidateConfigAsync()
+    {
+        try
+        {
+            var config = JsonSerializer.Deserialize<FaboriteConfig>(_configJson, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (config != null)
+            {
+                var result = await Api.ValidateConfigAsync(config);
+                _validationErrors = result.Errors;
+
+                if (result.IsValid)
+                {
+                    Snackbar.Add("Configuration is valid!", Severity.Success);
+                }
+            }
+        }
+        catch (JsonException ex)
+        {
+            _validationErrors = new List<string> { $"JSON Parse Error: {ex.Message}" };
+        }
+    }
+
+    private async Task SaveConfigAsync()
+    {
+        try
+        {
+            var config = JsonSerializer.Deserialize<FaboriteConfig>(_configJson, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (config != null)
+            {
+                var success = await Api.SaveConfigAsync(config);
+                if (success)
+                {
+                    Snackbar.Add("Configuration saved!", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("Failed to save configuration", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ApplyVisualEditorChanges()
+    {
+        _configJson = JsonSerializer.Serialize(_config, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        _validationErrors.Clear();
+        Snackbar.Add("Changes applied to JSON editor", Severity.Info);
+    }
+}

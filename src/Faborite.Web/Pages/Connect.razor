@@ -1,0 +1,175 @@
+@page "/connect"
+@inject FaboriteApiClient Api
+@inject AppStateService AppState
+@inject ISnackbar Snackbar
+
+<PageTitle>Connect - Faborite</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Connect to OneLake</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudForm @ref="_form" @bind-IsValid="_formValid">
+                <MudStack Spacing="3">
+                    <MudTextField @bind-Value="_workspaceId" 
+                                  Label="Workspace ID" 
+                                  Placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                  Required="true"
+                                  RequiredError="Workspace ID is required"
+                                  Variant="Variant.Outlined"
+                                  HelperText="Find this in your Fabric URL after /groups/" />
+
+                    <MudTextField @bind-Value="_lakehouseId" 
+                                  Label="Lakehouse ID" 
+                                  Placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                  Required="true"
+                                  RequiredError="Lakehouse ID is required"
+                                  Variant="Variant.Outlined"
+                                  HelperText="Find this in your Fabric URL after /lakehouses/" />
+
+                    <MudSelect @bind-Value="_authMethod" Label="Authentication Method" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Default")">Default (Azure CLI / Managed Identity)</MudSelectItem>
+                        <MudSelectItem Value="@("AzureCli")">Azure CLI</MudSelectItem>
+                        <MudSelectItem Value="@("ManagedIdentity")">Managed Identity</MudSelectItem>
+                        <MudSelectItem Value="@("ServicePrincipal")">Service Principal</MudSelectItem>
+                    </MudSelect>
+
+                    @if (_authMethod == "ServicePrincipal")
+                    {
+                        <MudTextField @bind-Value="_tenantId" Label="Tenant ID" Variant="Variant.Outlined" />
+                        <MudTextField @bind-Value="_clientId" Label="Client ID" Variant="Variant.Outlined" />
+                        <MudTextField @bind-Value="_clientSecret" Label="Client Secret" InputType="InputType.Password" Variant="Variant.Outlined" />
+                    }
+
+                    <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                        @if (AppState.ConnectionStatus.IsConnected)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DisconnectAsync">
+                                Disconnect
+                            </MudButton>
+                        }
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                                   OnClick="ConnectAsync" Disabled="@(!_formValid || _connecting)">
+                            @if (_connecting)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            }
+                            @(AppState.ConnectionStatus.IsConnected ? "Reconnect" : "Connect")
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudForm>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" GutterBottom="true">Connection Status</MudText>
+            
+            <MudStack Spacing="2">
+                <MudAlert Severity="@(AppState.ConnectionStatus.IsConnected ? Severity.Success : Severity.Warning)">
+                    @if (AppState.ConnectionStatus.IsConnected)
+                    {
+                        <span>Connected to OneLake</span>
+                    }
+                    else
+                    {
+                        <span>Not connected. Enter your workspace and lakehouse IDs to connect.</span>
+                    }
+                </MudAlert>
+
+                @if (AppState.ConnectionStatus.IsConnected)
+                {
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <tbody>
+                            <tr>
+                                <td><strong>Workspace ID</strong></td>
+                                <td><code>@AppState.ConnectionStatus.WorkspaceId</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Lakehouse ID</strong></td>
+                                <td><code>@AppState.ConnectionStatus.LakehouseId</code></td>
+                            </tr>
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mt-4" Elevation="2">
+            <MudText Typo="Typo.h6" GutterBottom="true">How to Find Your IDs</MudText>
+            <MudText Typo="Typo.body2" Class="mb-2">
+                Open your Lakehouse in Microsoft Fabric. The URL contains your IDs:
+            </MudText>
+            <MudPaper Class="pa-2" Elevation="0" Style="background-color: var(--mud-palette-background-grey); font-family: monospace; font-size: 0.75rem; overflow-x: auto;">
+                https://app.fabric.microsoft.com/groups/<span style="color: #7c4dff; font-weight: bold;">{workspace-id}</span>/lakehouses/<span style="color: #ff4081; font-weight: bold;">{lakehouse-id}</span>
+            </MudPaper>
+            <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
+                Make sure you're logged into Azure CLI: <code>az login</code>
+            </MudAlert>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private MudForm? _form;
+    private bool _formValid;
+    private bool _connecting;
+
+    private string _workspaceId = "";
+    private string _lakehouseId = "";
+    private string _authMethod = "Default";
+    private string? _tenantId;
+    private string? _clientId;
+    private string? _clientSecret;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load last used IDs
+        _workspaceId = AppState.LastWorkspaceId ?? "";
+        _lakehouseId = AppState.LastLakehouseId ?? "";
+
+        // Check current status
+        var status = await Api.GetConnectionStatusAsync();
+        AppState.SetConnectionStatus(status);
+    }
+
+    private async Task ConnectAsync()
+    {
+        _connecting = true;
+        StateHasChanged();
+
+        try
+        {
+            var (success, message) = await Api.ConnectAsync(_workspaceId, _lakehouseId, _authMethod);
+
+            if (success)
+            {
+                await AppState.SetLastConnectionAsync(_workspaceId, _lakehouseId);
+                var status = await Api.GetConnectionStatusAsync();
+                AppState.SetConnectionStatus(status);
+                Snackbar.Add("Successfully connected to OneLake!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add($"Connection failed: {message}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _connecting = false;
+        }
+    }
+
+    private async Task DisconnectAsync()
+    {
+        await Api.DisconnectAsync();
+        AppState.SetConnectionStatus(new ConnectionStatus());
+        Snackbar.Add("Disconnected", Severity.Info);
+    }
+}

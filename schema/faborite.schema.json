@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/mjtpena/faborite/main/schema/faborite.schema.json",
+  "title": "Faborite Configuration",
+  "description": "Configuration file for Faborite - Microsoft Fabric lakehouse sync tool",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Microsoft Fabric Workspace GUID"
+    },
+    "lakehouseId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Microsoft Fabric Lakehouse GUID"
+    },
+    "sample": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["random", "recent", "head", "tail", "stratified", "query", "full"],
+          "default": "random"
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10000
+        }
+      }
+    }
+  },
+  "required": ["workspaceId", "lakehouseId"]
+}

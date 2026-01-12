@@ -1,0 +1,199 @@
+@page "/history"
+@inject FaboriteApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>History - Faborite</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Sync History</MudText>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadHistoryAsync">
+        Refresh
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_sessions.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        No sync history yet. <MudLink Href="/sync">Run your first sync</MudLink> to see history here.
+    </MudAlert>
+}
+else
+{
+    <MudTimeline TimelinePosition="TimelinePosition.Start">
+        @foreach (var session in _sessions)
+        {
+            <MudTimelineItem Color="@GetStatusColor(session.Status)" Size="Size.Medium">
+                <ItemOpposite>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @session.StartTime.ToLocalTime().ToString("MMM dd, yyyy")
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @session.StartTime.ToLocalTime().ToString("HH:mm:ss")
+                    </MudText>
+                </ItemOpposite>
+                <ItemContent>
+                    <MudCard Elevation="1" Class="mb-2">
+                        <MudCardContent>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+                                <MudStack>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudIcon Icon="@GetStatusIcon(session.Status)" Color="@GetStatusColor(session.Status)" />
+                                        <MudText Typo="Typo.h6">@session.Status</MudText>
+                                    </MudStack>
+                                    <MudText Typo="Typo.body2">
+                                        <strong>@session.TablesCompleted</strong> tables synced •
+                                        <strong>@session.TotalRowsSynced.ToString("N0")</strong> rows
+                                    </MudText>
+                                    @if (session.EndTime.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            Duration: @((session.EndTime.Value - session.StartTime).TotalSeconds.ToString("F1"))s
+                                        </MudText>
+                                    }
+                                </MudStack>
+                                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(session.Status)">
+                                    @session.Status
+                                </MudChip>
+                            </MudStack>
+
+                            @if (session.TableProgress.Count > 0)
+                            {
+                                <MudDivider Class="my-2" />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Tables:</MudText>
+                                <MudChipSet T="string" ReadOnly="true" Class="mt-1">
+                                    @foreach (var tp in session.TableProgress.Take(5))
+                                    {
+                                        <MudChip T="string" Size="Size.Small" 
+                                                 Color="@(tp.Value.Status == "Completed" ? Color.Success : tp.Value.Status == "Failed" ? Color.Error : Color.Default)">
+                                            @tp.Key
+                                        </MudChip>
+                                    }
+                                    @if (session.TableProgress.Count > 5)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Default">
+                                            +@(session.TableProgress.Count - 5) more
+                                        </MudChip>
+                                    }
+                                </MudChipSet>
+                            }
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" 
+                                       OnClick="@(() => ViewDetails(session))">
+                                View Details
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </ItemContent>
+            </MudTimelineItem>
+        }
+    </MudTimeline>
+}
+
+@* Details Dialog *@
+<MudDialog @bind-Visible="_detailsOpen" Options="@(new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true })">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Sync Details</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_selectedSession != null)
+        {
+            <MudSimpleTable Dense="true" Class="mb-4">
+                <tbody>
+                    <tr><td>Session ID</td><td><code>@_selectedSession.SessionId</code></td></tr>
+                    <tr><td>Status</td><td><MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_selectedSession.Status)">@_selectedSession.Status</MudChip></td></tr>
+                    <tr><td>Started</td><td>@_selectedSession.StartTime.ToLocalTime().ToString("g")</td></tr>
+                    @if (_selectedSession.EndTime.HasValue)
+                    {
+                        <tr><td>Ended</td><td>@_selectedSession.EndTime.Value.ToLocalTime().ToString("g")</td></tr>
+                        <tr><td>Duration</td><td>@((_selectedSession.EndTime.Value - _selectedSession.StartTime).TotalSeconds.ToString("F1"))s</td></tr>
+                    }
+                    <tr><td>Tables</td><td>@_selectedSession.TablesCompleted / @_selectedSession.TotalTables</td></tr>
+                    <tr><td>Total Rows</td><td>@_selectedSession.TotalRowsSynced.ToString("N0")</td></tr>
+                </tbody>
+            </MudSimpleTable>
+
+            <MudText Typo="Typo.subtitle2" GutterBottom="true">Table Results</MudText>
+            <MudTable Items="_selectedSession.TableProgress.Values" Dense="true" Hover="true">
+                <HeaderContent>
+                    <MudTh>Table</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Rows</MudTh>
+                    <MudTh>Error</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.TableName</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Size="Size.Small" Color="@(context.Status == "Completed" ? Color.Success : context.Status == "Failed" ? Color.Error : Color.Default)">
+                            @context.Status
+                        </MudChip>
+                    </MudTd>
+                    <MudTd>@context.RowsSynced.ToString("N0")</MudTd>
+                    <MudTd><MudText Color="Color.Error">@context.Error</MudText></MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _detailsOpen = false)">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<SyncSession> _sessions = new();
+    private bool _loading = false;
+    private bool _detailsOpen = false;
+    private SyncSession? _selectedSession;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            _sessions = await Api.GetSyncHistoryAsync(50);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading history: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ViewDetails(SyncSession session)
+    {
+        _selectedSession = session;
+        _detailsOpen = true;
+    }
+
+    private string GetStatusIcon(string status) => status switch
+    {
+        "Completed" => Icons.Material.Filled.CheckCircle,
+        "Failed" => Icons.Material.Filled.Error,
+        "InProgress" => Icons.Material.Filled.Sync,
+        "Cancelled" => Icons.Material.Filled.Cancel,
+        _ => Icons.Material.Filled.Schedule
+    };
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "Completed" => Color.Success,
+        "Failed" => Color.Error,
+        "InProgress" => Color.Info,
+        "Cancelled" => Color.Warning,
+        _ => Color.Default
+    };
+}

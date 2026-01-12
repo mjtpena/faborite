@@ -48,6 +48,9 @@
     
     <!-- Resilience -->
     <PackageReference Include="Polly" Version="8.4.2" />
+    
+    <!-- Caching -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.0" />
   </ItemGroup>
 
 </Project>

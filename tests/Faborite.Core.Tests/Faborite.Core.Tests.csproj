@@ -34,7 +34,7 @@
     <PackageReference Include="AutoFixture.Xunit2" Version="4.18.1" />
     
     <!-- DuckDB native binaries for tests -->
-    <PackageReference Include="DuckDB.NET.Data" Version="1.2.0" />
+    <PackageReference Include="DuckDB.NET.Data" Version="1.4.3" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,8 +1,20 @@
+using Faborite.Api.Authentication;
 using Faborite.Api.Endpoints;
 using Faborite.Api.Hubs;
 using Faborite.Api.Services;
+using Serilog;
+
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(new ConfigurationBuilder()
+        .AddJsonFile("appsettings.json")
+        .Build())
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog();
 
 // Add services
 builder.Services.AddEndpointsApiExplorer();
@@ -25,7 +37,25 @@ builder.Services.AddSwaggerGen(options =>
             Url = new Uri("https://opensource.org/licenses/MIT")
         }
     });
+    
+    // Add API Key security definition
+    options.AddSecurityDefinition("ApiKey", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Name = "X-API-Key",
+        Description = "API Key authentication"
+    });
 });
+
+// Authentication (optional - controlled by config)
+var authEnabled = builder.Configuration.GetValue<bool>("Authentication:Enabled");
+if (authEnabled)
+{
+    builder.Services.AddAuthentication("ApiKey")
+        .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>("ApiKey", null);
+    builder.Services.AddAuthorization();
+}
 
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
@@ -58,6 +88,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowBlazor");
+
+// Use authentication if enabled
+if (authEnabled)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
 
 // Map endpoints
 app.MapAuthEndpoints();

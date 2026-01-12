@@ -1,0 +1,52 @@
+name: 'Faborite Sync Action'
+description: 'Sync Microsoft Fabric lakehouse data for CI/CD pipelines'
+branding:
+  icon: 'download-cloud'
+  color: 'blue'
+inputs:
+  workspace-id:
+    description: 'Fabric Workspace ID'
+    required: true
+  lakehouse-id:
+    description: 'Fabric Lakehouse ID'
+    required: true
+  tables:
+    description: 'Comma-separated list of tables to sync'
+    required: false
+  rows:
+    description: 'Number of rows to sample per table'
+    required: false
+    default: '5000'
+  strategy:
+    description: 'Sampling strategy (random, recent, head, tail, full)'
+    required: false
+    default: 'random'
+  format:
+    description: 'Output format (parquet, csv, json, duckdb)'
+    required: false
+    default: 'parquet'
+  azure-tenant-id:
+    description: 'Azure Tenant ID'
+    required: true
+  azure-client-id:
+    description: 'Azure Client ID'
+    required: true
+  azure-client-secret:
+    description: 'Azure Client Secret'
+    required: true
+outputs:
+  tables-synced:
+    description: 'Number of tables synced'
+  total-rows:
+    description: 'Total rows synced'
+  duration:
+    description: 'Sync duration in seconds'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    FABORITE_WORKSPACE_ID: ${{ inputs.workspace-id }}
+    FABORITE_LAKEHOUSE_ID: ${{ inputs.lakehouse-id }}
+    AZURE_TENANT_ID: ${{ inputs.azure-tenant-id }}
+    AZURE_CLIENT_ID: ${{ inputs.azure-client-id }}
+    AZURE_CLIENT_SECRET: ${{ inputs.azure-client-secret }}

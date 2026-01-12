@@ -28,7 +28,7 @@
   <ItemGroup>
     <!-- Azure SDKs for OneLake access -->
     <PackageReference Include="Azure.Identity" Version="1.13.1" />
-    <PackageReference Include="Azure.Storage.Files.DataLake" Version="12.21.0" />
+    <PackageReference Include="Azure.Storage.Files.DataLake" Version="12.25.0" />
     
     <!-- Parquet support -->
     <PackageReference Include="Parquet.Net" Version="5.0.2" />

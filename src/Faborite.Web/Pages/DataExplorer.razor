@@ -1,0 +1,330 @@
+@page "/explorer"
+@inject ILogger<DataExplorer> Logger
+
+<PageTitle>Data Explorer - Faborite</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" GutterBottom="true">Data Explorer</MudText>
+    <MudText Typo="Typo.body1" Class="mb-4">Browse schemas, preview data, and export tables</MudText>
+
+    <MudGrid>
+        <!-- Left Panel: Schema Browser -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Schema Browser</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadSchemaAsync" Size="Size.Small" />
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_loadingSchema)
+                    {
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudTextField @bind-Value="_searchTerm" 
+                                      Placeholder="Search tables..." 
+                                      Adornment="Adornment.Start" 
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true"
+                                      Class="mb-2" />
+
+                        @foreach (var schema in _schemas)
+                        {
+                            <MudText Typo="Typo.subtitle2" Class="mt-2">
+                                <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Small" Class="mr-1" />
+                                @schema.Name
+                            </MudText>
+                            <MudList T="string" Dense="true" Class="ml-4">
+                                @foreach (var table in schema.Tables)
+                                {
+                                    <MudListItem T="string" OnClick="@(() => OnTableSelected(schema.Name, table))">
+                                        <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Small" Class="mr-1" />
+                                        @table
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Right Panel: Data Preview -->
+        <MudItem xs="12" md="8">
+            @if (_selectedTable == null)
+            {
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <div class="d-flex flex-column align-center justify-center" style="height: 400px;">
+                            <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" />
+                            <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-2">Select a table to preview</MudText>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            }
+            else
+            {
+                <!-- Table Info -->
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">@_selectedTable.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@_selectedTable.Schema</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudIconButton Icon="@Icons.Material.Filled.Download" OnClick="ExportTable" Title="Export" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshPreview" Title="Refresh" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid>
+                            <MudItem xs="4">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Row Count</MudText>
+                                <MudText Typo="Typo.body1">@_selectedTable.RowCount.ToString("N0")</MudText>
+                            </MudItem>
+                            <MudItem xs="4">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Column Count</MudText>
+                                <MudText Typo="Typo.body1">@_selectedTable.ColumnCount</MudText>
+                            </MudItem>
+                            <MudItem xs="4">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Last Updated</MudText>
+                                <MudText Typo="Typo.body1">@_selectedTable.LastUpdated.ToString("yyyy-MM-dd HH:mm")</MudText>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Column Details -->
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Columns (@_selectedTable.Columns.Count)</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudTable Items="@_selectedTable.Columns" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Name</MudTh>
+                                <MudTh>Type</MudTh>
+                                <MudTh>Nullable</MudTh>
+                                <MudTh>Primary Key</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Name">
+                                    <MudIcon Icon="@Icons.Material.Filled.ViewColumn" Size="Size.Small" Class="mr-1" />
+                                    @context.Name
+                                </MudTd>
+                                <MudTd DataLabel="Type">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.DataType</MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="Nullable">
+                                    @if (context.IsNullable)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error" />
+                                    }
+                                </MudTd>
+                                <MudTd DataLabel="Primary Key">
+                                    @if (context.IsPrimaryKey)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">PK</MudChip>
+                                    }
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Data Preview -->
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Data Preview (Top 100 rows)</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudSelect T="int" @bind-Value="_previewLimit" Label="Rows" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                <MudSelectItem Value="10">10</MudSelectItem>
+                                <MudSelectItem Value="50">50</MudSelectItem>
+                                <MudSelectItem Value="100">100</MudSelectItem>
+                                <MudSelectItem Value="500">500</MudSelectItem>
+                            </MudSelect>
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (_loadingPreview)
+                        {
+                            <MudProgressLinear Indeterminate="true" />
+                        }
+                        else if (_previewData.Count == 0)
+                        {
+                            <MudAlert Severity="Severity.Info">No data available</MudAlert>
+                        }
+                        else
+                        {
+                            <div style="max-height: 500px; overflow: auto;">
+                                <MudSimpleTable Dense="true" Hover="true" Striped="true" Style="white-space: nowrap;">
+                                    <thead>
+                                        <tr>
+                                            @foreach (var col in _selectedTable.Columns)
+                                            {
+                                                <th>@col.Name</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _previewData)
+                                        {
+                                            <tr>
+                                                @foreach (var col in _selectedTable.Columns)
+                                                {
+                                                    <td>@row[col.Name]</td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </MudSimpleTable>
+                            </div>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private bool _loadingSchema = true;
+    private bool _loadingPreview = false;
+    private string _searchTerm = string.Empty;
+    private int _previewLimit = 100;
+    private List<SchemaInfo> _schemas = new();
+    private TableInfo? _selectedTable;
+    private List<Dictionary<string, object?>> _previewData = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSchemaAsync();
+    }
+
+    private async Task LoadSchemaAsync()
+    {
+        _loadingSchema = true;
+        try
+        {
+            // TODO: Replace with actual API call
+            await Task.Delay(500); // Simulate API call
+
+            _schemas = new List<SchemaInfo>
+            {
+                new() { Name = "dbo", Tables = new() { "customers", "orders", "products", "sales" } },
+                new() { Name = "analytics", Tables = new() { "metrics", "reports", "dashboards" } },
+                new() { Name = "staging", Tables = new() { "raw_data", "temp_import" } }
+            };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load schema");
+        }
+        finally
+        {
+            _loadingSchema = false;
+        }
+    }
+
+    private async Task OnTableSelected(string schema, string tableName)
+    {
+        _loadingPreview = true;
+        try
+        {
+            // TODO: Replace with actual API call
+            await Task.Delay(300);
+
+            _selectedTable = new TableInfo
+            {
+                Name = tableName,
+                Schema = schema,
+                RowCount = 15420,
+                ColumnCount = 8,
+                LastUpdated = DateTime.Now.AddHours(-2),
+                Columns = new List<ColumnInfo>
+                {
+                    new() { Name = "id", DataType = "bigint", IsNullable = false, IsPrimaryKey = true },
+                    new() { Name = "name", DataType = "nvarchar(255)", IsNullable = false, IsPrimaryKey = false },
+                    new() { Name = "email", DataType = "nvarchar(255)", IsNullable = true, IsPrimaryKey = false },
+                    new() { Name = "created_at", DataType = "datetime", IsNullable = false, IsPrimaryKey = false },
+                    new() { Name = "updated_at", DataType = "datetime", IsNullable = true, IsPrimaryKey = false },
+                    new() { Name = "status", DataType = "nvarchar(50)", IsNullable = false, IsPrimaryKey = false },
+                    new() { Name = "balance", DataType = "decimal(18,2)", IsNullable = true, IsPrimaryKey = false },
+                    new() { Name = "metadata", DataType = "nvarchar(max)", IsNullable = true, IsPrimaryKey = false }
+                }
+            };
+
+            _previewData = Enumerable.Range(1, Math.Min(_previewLimit, 100)).Select(i => new Dictionary<string, object?>
+            {
+                ["id"] = i,
+                ["name"] = $"User {i}",
+                ["email"] = $"user{i}@example.com",
+                ["created_at"] = DateTime.Now.AddDays(-i),
+                ["updated_at"] = DateTime.Now.AddHours(-i),
+                ["status"] = i % 3 == 0 ? "active" : "inactive",
+                ["balance"] = (decimal)(i * 100.50),
+                ["metadata"] = $"{{\"tier\": \"premium\"}}"
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load table preview");
+        }
+        finally
+        {
+            _loadingPreview = false;
+        }
+    }
+
+    private async Task RefreshPreview()
+    {
+        if (_selectedTable != null)
+        {
+            await OnTableSelected(_selectedTable.Schema, _selectedTable.Name);
+        }
+    }
+
+    private async Task ExportTable()
+    {
+        // TODO: Implement table export (CSV, JSON, Parquet)
+        Logger.LogInformation("Exporting table: {TableName}", _selectedTable?.Name);
+        await Task.CompletedTask;
+    }
+
+    private class SchemaInfo
+    {
+        public required string Name { get; init; }
+        public required List<string> Tables { get; init; }
+    }
+
+    private class TableInfo
+    {
+        public required string Name { get; init; }
+        public required string Schema { get; init; }
+        public long RowCount { get; init; }
+        public int ColumnCount { get; init; }
+        public DateTime LastUpdated { get; init; }
+        public required List<ColumnInfo> Columns { get; init; }
+    }
+
+    private class ColumnInfo
+    {
+        public required string Name { get; init; }
+        public required string DataType { get; init; }
+        public bool IsNullable { get; init; }
+        public bool IsPrimaryKey { get; init; }
+    }
+}

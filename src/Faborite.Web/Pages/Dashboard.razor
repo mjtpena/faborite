@@ -1,0 +1,336 @@
+@page "/dashboard"
+@inject ILogger<Dashboard> Logger
+
+<PageTitle>Dashboard - Faborite</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" GutterBottom="true">Dashboard</MudText>
+    <MudText Typo="Typo.body1" Class="mb-4">Overview of your lakehouse sync operations</MudText>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else
+    {
+        <!-- Metrics Cards -->
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between">
+                            <div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Total Tables</MudText>
+                                <MudText Typo="Typo.h4">@_metrics.TotalTables</MudText>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Primary" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between">
+                            <div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Synced Today</MudText>
+                                <MudText Typo="Typo.h4">@_metrics.SyncedToday</MudText>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Large" Color="Color.Success" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between">
+                            <div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Data Volume</MudText>
+                                <MudText Typo="Typo.h4">@FormatBytes(_metrics.TotalBytes)</MudText>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Large" Color="Color.Info" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between">
+                            <div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Failed Syncs</MudText>
+                                <MudText Typo="Typo.h4" Color="@(_metrics.FailedSyncs > 0 ? Color.Error : Color.Default)">@_metrics.FailedSyncs</MudText>
+                            </div>
+                            <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="@(_metrics.FailedSyncs > 0 ? Color.Error : Color.Default)" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Charts Section -->
+        <MudGrid Class="mt-4">
+            <MudItem xs="12" md="8">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Sync Activity (Last 7 Days)</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudChart ChartType="ChartType.Line" 
+                                  ChartSeries="@_syncSeries" 
+                                  XAxisLabels="@_syncLabels" 
+                                  Width="100%" 
+                                  Height="300px">
+                        </MudChart>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Sync Status</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudChart ChartType="ChartType.Donut" 
+                                  InputData="@_statusData" 
+                                  InputLabels="@_statusLabels"
+                                  Width="100%" 
+                                  Height="300px">
+                        </MudChart>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Recent Activity -->
+        <MudCard Elevation="2" Class="mt-4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Recent Activity</MudText>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadDashboardData" />
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudTable Items="@_recentActivity" Hover="true" Dense="true">
+                    <HeaderContent>
+                        <MudTh>Timestamp</MudTh>
+                        <MudTh>Table</MudTh>
+                        <MudTh>Operation</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Duration</MudTh>
+                        <MudTh>Rows</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Timestamp">@context.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+                        <MudTd DataLabel="Table">@context.TableName</MudTd>
+                        <MudTd DataLabel="Operation">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">@context.Operation</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">@context.Status</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Duration">@context.Duration</MudTd>
+                        <MudTd DataLabel="Rows">@context.RowsAffected.ToString("N0")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudCardContent>
+        </MudCard>
+
+        <!-- Active Connections -->
+        <MudCard Elevation="2" Class="mt-4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Active Connections</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudList T="string" Dense="true">
+                    @foreach (var conn in _activeConnections)
+                    {
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.Cloud">
+                            <div class="d-flex justify-space-between align-center">
+                                <div>
+                                    <MudText Typo="Typo.body1">@conn.WorkspaceName</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@conn.LakehouseName</MudText>
+                                </div>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success">Connected</MudChip>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudCardContent>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    private bool _loading = true;
+    private DashboardMetrics _metrics = new();
+    private List<ChartSeries> _syncSeries = new();
+    private string[] _syncLabels = Array.Empty<string>();
+    private double[] _statusData = Array.Empty<double>();
+    private string[] _statusLabels = Array.Empty<string>();
+    private List<RecentActivity> _recentActivity = new();
+    private List<ActiveConnection> _activeConnections = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        _loading = true;
+        try
+        {
+            // Load metrics
+            _metrics = await GetMetricsAsync();
+
+            // Load chart data
+            var syncData = await GetSyncActivityDataAsync();
+            _syncSeries = new List<ChartSeries>
+            {
+                new ChartSeries { Name = "Successful", Data = syncData.SuccessfulSyncs },
+                new ChartSeries { Name = "Failed", Data = syncData.FailedSyncs }
+            };
+            _syncLabels = syncData.Labels;
+
+            // Load status data
+            _statusData = new[] { (double)_metrics.SuccessfulSyncs, (double)_metrics.FailedSyncs, (double)_metrics.PendingSyncs };
+            _statusLabels = new[] { "Successful", "Failed", "Pending" };
+
+            // Load recent activity
+            _recentActivity = await GetRecentActivityAsync();
+
+            // Load active connections
+            _activeConnections = await GetActiveConnectionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load dashboard data");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task<DashboardMetrics> GetMetricsAsync()
+    {
+        // TODO: Replace with actual API call
+        return Task.FromResult(new DashboardMetrics
+        {
+            TotalTables = 42,
+            SyncedToday = 15,
+            TotalBytes = 5_368_709_120L, // 5 GB
+            FailedSyncs = 2,
+            SuccessfulSyncs = 38,
+            PendingSyncs = 2
+        });
+    }
+
+    private Task<SyncActivityData> GetSyncActivityDataAsync()
+    {
+        // TODO: Replace with actual API call
+        var labels = Enumerable.Range(0, 7).Select(i => DateTime.Now.AddDays(-6 + i).ToString("MM/dd")).ToArray();
+        var successful = new double[] { 12, 15, 18, 14, 20, 16, 15 };
+        var failed = new double[] { 1, 0, 2, 1, 0, 3, 2 };
+
+        return Task.FromResult(new SyncActivityData
+        {
+            Labels = labels,
+            SuccessfulSyncs = successful,
+            FailedSyncs = failed
+        });
+    }
+
+    private Task<List<RecentActivity>> GetRecentActivityAsync()
+    {
+        // TODO: Replace with actual API call
+        var activities = new List<RecentActivity>
+        {
+            new() { Timestamp = DateTime.Now.AddMinutes(-5), TableName = "sales_data", Operation = "SYNC", Status = "Success", Duration = "2.3s", RowsAffected = 1250 },
+            new() { Timestamp = DateTime.Now.AddMinutes(-12), TableName = "customer_profiles", Operation = "SYNC", Status = "Success", Duration = "1.8s", RowsAffected = 850 },
+            new() { Timestamp = DateTime.Now.AddMinutes(-25), TableName = "inventory", Operation = "SYNC", Status = "Failed", Duration = "0.5s", RowsAffected = 0 },
+            new() { Timestamp = DateTime.Now.AddMinutes(-40), TableName = "orders", Operation = "SYNC", Status = "Success", Duration = "3.1s", RowsAffected = 2100 },
+            new() { Timestamp = DateTime.Now.AddMinutes(-55), TableName = "products", Operation = "SYNC", Status = "Success", Duration = "1.2s", RowsAffected = 450 }
+        };
+        return Task.FromResult(activities);
+    }
+
+    private Task<List<ActiveConnection>> GetActiveConnectionsAsync()
+    {
+        // TODO: Replace with actual API call
+        var connections = new List<ActiveConnection>
+        {
+            new() { WorkspaceName = "Production Workspace", LakehouseName = "MainLakehouse" },
+            new() { WorkspaceName = "Analytics Workspace", LakehouseName = "AnalyticsLH" }
+        };
+        return Task.FromResult(connections);
+    }
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "Success" => Color.Success,
+        "Failed" => Color.Error,
+        "Pending" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len /= 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private record DashboardMetrics
+    {
+        public int TotalTables { get; init; }
+        public int SyncedToday { get; init; }
+        public long TotalBytes { get; init; }
+        public int FailedSyncs { get; init; }
+        public int SuccessfulSyncs { get; init; }
+        public int PendingSyncs { get; init; }
+    }
+
+    private record SyncActivityData
+    {
+        public required string[] Labels { get; init; }
+        public required double[] SuccessfulSyncs { get; init; }
+        public required double[] FailedSyncs { get; init; }
+    }
+
+    private record RecentActivity
+    {
+        public DateTime Timestamp { get; init; }
+        public required string TableName { get; init; }
+        public required string Operation { get; init; }
+        public required string Status { get; init; }
+        public required string Duration { get; init; }
+        public int RowsAffected { get; init; }
+    }
+
+    private record ActiveConnection
+    {
+        public required string WorkspaceName { get; init; }
+        public required string LakehouseName { get; init; }
+    }
+}

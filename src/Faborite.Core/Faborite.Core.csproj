@@ -51,6 +51,11 @@
     
     <!-- Caching -->
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.0" />
+    
+    <!-- Database Connectors -->
+    <PackageReference Include="Npgsql" Version="9.0.2" />
+    <PackageReference Include="MySqlConnector" Version="2.4.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
   </ItemGroup>
 
 </Project>

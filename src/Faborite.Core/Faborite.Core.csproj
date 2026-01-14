@@ -68,6 +68,7 @@
     
     <!-- NoSQL Connectors -->
     <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
+    <PackageReference Include="MongoDB.Driver" Version="2.31.0" />
   </ItemGroup>
 
 </Project>

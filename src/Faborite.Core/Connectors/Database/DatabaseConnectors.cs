@@ -58,52 +58,7 @@ public class RedshiftConnector : IQueryableConnector
     }
 }
 
-/// <summary>
-/// Google BigQuery connector with partition awareness. Issue #133
-/// </summary>
-public class BigQueryConnector : IQueryableConnector
-{
-    private readonly ILogger<BigQueryConnector> _logger;
-    private readonly string _projectId;
-
-    public string Name => "BigQuery";
-    public string Version => "1.0.0";
-
-    public BigQueryConnector(ILogger<BigQueryConnector> logger, string projectId)
-    {
-        _logger = logger;
-        _projectId = projectId;
-    }
-
-    public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Testing BigQuery connection to project {ProjectId}", _projectId);
-        await Task.Delay(100, cancellationToken);
-        return true;
-    }
-
-    public async Task<ConnectorMetadata> GetMetadataAsync(CancellationToken cancellationToken = default)
-    {
-        return new ConnectorMetadata(
-            "BigQuery",
-            Version,
-            new Dictionary<string, string> { ["PartitionAware"] = "true", ["Serverless"] = "true" },
-            new List<string> { "Query", "Streaming Insert", "Load Job" }
-        );
-    }
-
-    public async Task<QueryResult> ExecuteQueryAsync(string query, CancellationToken cancellationToken = default)
-    {
-        await Task.Delay(100, cancellationToken);
-        return new QueryResult(new List<Dictionary<string, object?>>(), new List<ColumnMetadata>(), 0, TimeSpan.FromSeconds(1));
-    }
-
-    public async Task<List<TableInfo>> ListTablesAsync(CancellationToken cancellationToken = default)
-    {
-        await Task.Delay(100, cancellationToken);
-        return new List<TableInfo>();
-    }
-}
+// BigQueryConnector moved to separate file: BigQueryConnector.cs (Production-ready implementation)
 
 /// <summary>
 /// Azure Synapse Analytics dedicated SQL pool. Issue #134

@@ -9,61 +9,7 @@ namespace Faborite.Core.Connectors.Database;
 
 #region Cloud Data Warehouses
 
-/// <summary>
-/// Snowflake connector with incremental sync. Issue #131
-/// </summary>
-public class SnowflakeConnector : IQueryableConnector
-{
-    private readonly ILogger<SnowflakeConnector> _logger;
-    private readonly string _account;
-    private readonly string _warehouse;
-
-    public string Name => "Snowflake";
-    public string Version => "1.0.0";
-
-    public SnowflakeConnector(ILogger<SnowflakeConnector> logger, string account, string warehouse)
-    {
-        _logger = logger;
-        _account = account;
-        _warehouse = warehouse;
-    }
-
-    public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Testing Snowflake connection to {Account}/{Warehouse}", _account, _warehouse);
-        await Task.Delay(100, cancellationToken);
-        return true; // Stub: would actually test connection
-    }
-
-    public async Task<ConnectorMetadata> GetMetadataAsync(CancellationToken cancellationToken = default)
-    {
-        return new ConnectorMetadata(
-            "Snowflake",
-            Version,
-            new Dictionary<string, string>
-            {
-                ["IncrementalSync"] = "true",
-                ["ChangeTracking"] = "true",
-                ["TimeTravel"] = "true"
-            },
-            new List<string> { "Query", "Bulk Load", "Streaming" }
-        );
-    }
-
-    public async Task<QueryResult> ExecuteQueryAsync(string query, CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Executing Snowflake query: {Query}", query);
-        await Task.Delay(100, cancellationToken);
-        return new QueryResult(new List<Dictionary<string, object?>>(), new List<ColumnMetadata>(), 0, TimeSpan.FromSeconds(1));
-    }
-
-    public async Task<List<TableInfo>> ListTablesAsync(CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Listing Snowflake tables");
-        await Task.Delay(100, cancellationToken);
-        return new List<TableInfo>();
-    }
-}
+// SnowflakeConnector moved to separate file: SnowflakeConnector.cs (Production-ready implementation)
 
 /// <summary>
 /// Amazon Redshift connector with Spectrum support. Issue #132

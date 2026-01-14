@@ -59,6 +59,9 @@
     
     <!-- Streaming Connectors -->
     <PackageReference Include="Confluent.Kafka" Version="2.6.1" />
+    
+    <!-- Cloud Data Warehouse Connectors -->
+    <PackageReference Include="Snowflake.Data" Version="4.3.0" />
   </ItemGroup>
 
 </Project>

@@ -1,301 +1,315 @@
-using Microsoft.Extensions.Logging;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
-using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace Faborite.Core.Connectors.Streaming;
 
 /// <summary>
-/// Production-ready Apache Kafka connector for real-time streaming data ingestion.
-/// Issue #141 - Apache Kafka streaming data ingestion
+/// Production-ready Apache Kafka connector for distributed streaming.
+/// Issue #143 - Apache Kafka connector
 /// </summary>
-public class KafkaConnector : IStreamingConnector
+public class KafkaConnector : IAsyncDisposable
 {
     private readonly ILogger<KafkaConnector> _logger;
-    private readonly KafkaConfig _config;
-    private IConsumer<string, string>? _consumer;
+    private readonly ProducerConfig _producerConfig;
+    private readonly ConsumerConfig _consumerConfig;
     private IProducer<string, string>? _producer;
+    private IConsumer<string, string>? _consumer;
 
-    public string Name => "Apache Kafka";
-    public string Version => "1.0.0";
-
-    public KafkaConnector(ILogger<KafkaConnector> logger, KafkaConfig config)
+    public KafkaConnector(
+        ILogger<KafkaConnector> logger,
+        string bootstrapServers,
+        string? groupId = null,
+        string? saslUsername = null,
+        string? saslPassword = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-    }
 
-    public Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Testing Kafka connection to {BootstrapServers}", _config.BootstrapServers);
-        
-        try
+        _producerConfig = new ProducerConfig
         {
-            var producerConfig = new ProducerConfig
-            {
-                BootstrapServers = _config.BootstrapServers,
-                ClientId = _config.ClientId,
-                SecurityProtocol = _config.SecurityProtocol,
-                SaslMechanism = _config.SaslMechanism,
-                SaslUsername = _config.SaslUsername,
-                SaslPassword = _config.SaslPassword
-            };
-
-            using var adminClient = new AdminClientBuilder(producerConfig).Build();
-            
-            // Just test the connection by getting metadata
-            var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(5));
-            
-            _logger.LogInformation("Kafka connection successful. Found {BrokerCount} brokers, {TopicCount} topics",
-                metadata.Brokers.Count, metadata.Topics.Count);
-            
-            return Task.FromResult(true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Kafka connection failed");
-            return Task.FromResult(false);
-        }
-    }
-
-    public Task<ConnectorMetadata> GetMetadataAsync(CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(new ConnectorMetadata(
-            "Apache Kafka",
-            Version,
-            new Dictionary<string, string>
-            {
-                ["Streaming"] = "true",
-                ["Partitioning"] = "true",
-                ["Replication"] = "true",
-                ["ExactlyOnce"] = "true",
-                ["ConsumerGroups"] = "true"
-            },
-            new List<string> { "Produce", "Consume", "StreamProcessing" }
-        ));
-    }
-
-    public async Task ProduceAsync<T>(
-        string topic,
-        T value,
-        string? key = null,
-        CancellationToken cancellationToken = default) where T : class
-    {
-        _logger.LogInformation("Producing message to topic {Topic}", topic);
-        
-        _producer ??= CreateProducer();
-        
-        var message = new Message<string, string>
-        {
-            Key = key ?? Guid.NewGuid().ToString(),
-            Value = JsonSerializer.Serialize(value)
+            BootstrapServers = bootstrapServers,
+            Acks = Acks.All,
+            EnableIdempotence = true,
+            MaxInFlight = 5,
+            CompressionType = CompressionType.Snappy,
+            LingerMs = 10,
+            BatchSize = 16384,
+            MessageTimeoutMs = 300000
         };
 
+        _consumerConfig = new ConsumerConfig
+        {
+            BootstrapServers = bootstrapServers,
+            GroupId = groupId ?? $"faborite-{Guid.NewGuid()}",
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            EnableAutoCommit = false,
+            EnableAutoOffsetStore = false,
+            MaxPollIntervalMs = 300000
+        };
+
+        if (!string.IsNullOrEmpty(saslUsername) && !string.IsNullOrEmpty(saslPassword))
+        {
+            _producerConfig.SecurityProtocol = SecurityProtocol.SaslSsl;
+            _producerConfig.SaslMechanism = SaslMechanism.Plain;
+            _producerConfig.SaslUsername = saslUsername;
+            _producerConfig.SaslPassword = saslPassword;
+
+            _consumerConfig.SecurityProtocol = SecurityProtocol.SaslSsl;
+            _consumerConfig.SaslMechanism = SaslMechanism.Plain;
+            _consumerConfig.SaslUsername = saslUsername;
+            _consumerConfig.SaslPassword = saslPassword;
+        }
+
+        _logger.LogInformation("Kafka connector initialized for {Servers}", bootstrapServers);
+    }
+
+    public async Task<DeliveryResult<string, string>> ProduceAsync(
+        string topic,
+        string key,
+        string value,
+        CancellationToken cancellationToken = default)
+    {
         try
         {
-            var deliveryResult = await _producer.ProduceAsync(topic, message, cancellationToken);
-            
-            _logger.LogInformation("Message delivered to {Topic} partition {Partition} at offset {Offset}",
-                deliveryResult.Topic, deliveryResult.Partition.Value, deliveryResult.Offset.Value);
+            _producer ??= new ProducerBuilder<string, string>(_producerConfig)
+                .SetErrorHandler((_, e) => _logger.LogError("Kafka producer error: {Reason}", e.Reason))
+                .Build();
+
+            var message = new Message<string, string>
+            {
+                Key = key,
+                Value = value,
+                Timestamp = Timestamp.Default
+            };
+
+            var result = await _producer.ProduceAsync(topic, message, cancellationToken);
+
+            _logger.LogDebug("Produced message to {Topic} partition {Partition} offset {Offset}",
+                topic, result.Partition.Value, result.Offset.Value);
+
+            return result;
         }
-        catch (ProduceException<string, string> ex)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to produce message to {Topic}", topic);
             throw;
         }
     }
 
-    public async Task ProduceBatchAsync<T>(
+    public async Task<int> ProduceBatchAsync(
         string topic,
-        IEnumerable<T> values,
-        Func<T, string>? keySelector = null,
-        CancellationToken cancellationToken = default) where T : class
+        List<(string Key, string Value)> messages,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Producing batch to topic {Topic}", topic);
-        
-        _producer ??= CreateProducer();
-        
-        var tasks = new List<Task<DeliveryResult<string, string>>>();
-        
-        foreach (var value in values)
+        try
         {
-            var message = new Message<string, string>
-            {
-                Key = keySelector?.Invoke(value) ?? Guid.NewGuid().ToString(),
-                Value = JsonSerializer.Serialize(value)
-            };
+            _logger.LogInformation("Producing batch of {Count} messages to {Topic}", messages.Count, topic);
 
-            tasks.Add(_producer.ProduceAsync(topic, message, cancellationToken));
+            _producer ??= new ProducerBuilder<string, string>(_producerConfig)
+                .SetErrorHandler((_, e) => _logger.LogError("Kafka producer error: {Reason}", e.Reason))
+                .Build();
+
+            var tasks = messages.Select(msg =>
+                _producer.ProduceAsync(topic, new Message<string, string>
+                {
+                    Key = msg.Key,
+                    Value = msg.Value
+                }, cancellationToken)
+            ).ToList();
+
+            await Task.WhenAll(tasks);
+
+            _logger.LogInformation("Produced {Count} messages to {Topic}", messages.Count, topic);
+            return messages.Count;
         }
-
-        await Task.WhenAll(tasks);
-        
-        _logger.LogInformation("Batch of {Count} messages delivered to {Topic}", tasks.Count, topic);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to produce batch to {Topic}", topic);
+            throw;
+        }
     }
 
-    public async IAsyncEnumerable<T> ConsumeAsync<T>(
+    public async IAsyncEnumerable<ConsumeResult<string, string>> ConsumeAsync(
         string topic,
-        string consumerGroup,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default) where T : class
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Starting to consume from topic {Topic} with group {Group}", topic, consumerGroup);
-        
-        var consumer = CreateConsumer(consumerGroup);
-        consumer.Subscribe(topic);
+        _consumer ??= new ConsumerBuilder<string, string>(_consumerConfig)
+            .SetErrorHandler((_, e) => _logger.LogError("Kafka consumer error: {Reason}", e.Reason))
+            .Build();
+
+        _consumer.Subscribe(topic);
+
+        _logger.LogInformation("Started consuming from topic {Topic}", topic);
 
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var consumeResult = consumer.Consume(cancellationToken);
-                
-                if (consumeResult == null)
-                    continue;
+                ConsumeResult<string, string>? result = null;
 
-                _logger.LogDebug("Consumed message from {Topic} partition {Partition} at offset {Offset}",
-                    consumeResult.Topic, consumeResult.Partition.Value, consumeResult.Offset.Value);
-
-                T? message = null;
                 try
                 {
-                    message = JsonSerializer.Deserialize<T>(consumeResult.Message.Value);
-                }
-                catch (JsonException ex)
-                {
-                    _logger.LogError(ex, "Failed to deserialize message from {Topic}", topic);
-                    continue;
-                }
+                    result = _consumer.Consume(TimeSpan.FromSeconds(1));
 
-                if (message != null)
-                {
-                    yield return message;
-                }
+                    if (result != null && !result.IsPartitionEOF)
+                    {
+                        yield return result;
 
-                // Commit offset after successful processing
-                if (_config.EnableAutoCommit == false)
+                        // Manually commit offset after processing
+                        _consumer.StoreOffset(result);
+                        _consumer.Commit(result);
+                    }
+                }
+                catch (ConsumeException ex)
                 {
-                    consumer.Commit(consumeResult);
+                    _logger.LogError(ex, "Consume error");
                 }
             }
         }
         finally
         {
-            consumer.Close();
-            consumer.Dispose();
+            _consumer.Close();
+            _logger.LogInformation("Stopped consuming from topic {Topic}", topic);
         }
     }
 
-    public async Task<List<TopicInfo>> ListTopicsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<string>> ListTopicsAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Listing Kafka topics");
-        
-        var adminConfig = new AdminClientConfig
+        try
         {
-            BootstrapServers = _config.BootstrapServers
-        };
-        
-        using var adminClient = new AdminClientBuilder(adminConfig).Build();
-        var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(5));
-        
-        return await Task.FromResult(metadata.Topics.Select(t => new TopicInfo(
-            t.Topic,
-            t.Partitions.Count,
-            t.Error.IsError ? t.Error.Reason : null
-        )).ToList());
+            _logger.LogDebug("Listing Kafka topics");
+
+            using var adminClient = new AdminClientBuilder(new AdminClientConfig
+            {
+                BootstrapServers = _producerConfig.BootstrapServers
+            }).Build();
+
+            var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
+            var topics = metadata.Topics
+                .Where(t => !t.Topic.StartsWith("__"))
+                .Select(t => t.Topic)
+                .ToList();
+
+            _logger.LogInformation("Found {Count} topics", topics.Count);
+            return await Task.FromResult(topics);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to list topics");
+            throw;
+        }
     }
 
-    private IProducer<string, string> CreateProducer()
+    public async Task CreateTopicAsync(
+        string topicName,
+        int numPartitions = 3,
+        short replicationFactor = 1,
+        CancellationToken cancellationToken = default)
     {
-        var config = new ProducerConfig
+        try
         {
-            BootstrapServers = _config.BootstrapServers,
-            ClientId = _config.ClientId,
-            SecurityProtocol = _config.SecurityProtocol,
-            SaslMechanism = _config.SaslMechanism,
-            SaslUsername = _config.SaslUsername,
-            SaslPassword = _config.SaslPassword,
-            Acks = Acks.All, // Wait for all replicas
-            EnableIdempotence = true,
-            MaxInFlight = 5,
-            MessageTimeoutMs = 30000,
-            CompressionType = CompressionType.Snappy
-        };
+            _logger.LogInformation("Creating topic {Topic} with {Partitions} partitions",
+                topicName, numPartitions);
 
-        return new ProducerBuilder<string, string>(config)
-            .SetErrorHandler((_, error) =>
+            using var adminClient = new AdminClientBuilder(new AdminClientConfig
             {
-                _logger.LogError("Kafka producer error: {Reason}", error.Reason);
-            })
-            .Build();
+                BootstrapServers = _producerConfig.BootstrapServers
+            }).Build();
+
+            await adminClient.CreateTopicsAsync(new[]
+            {
+                new TopicSpecification
+                {
+                    Name = topicName,
+                    NumPartitions = numPartitions,
+                    ReplicationFactor = replicationFactor
+                }
+            });
+
+            _logger.LogInformation("Topic {Topic} created successfully", topicName);
+        }
+        catch (CreateTopicsException ex)
+        {
+            _logger.LogError(ex, "Failed to create topic {Topic}", topicName);
+            throw;
+        }
     }
 
-    private IConsumer<string, string> CreateConsumer(string groupId)
+    public async Task DeleteTopicAsync(string topicName, CancellationToken cancellationToken = default)
     {
-        var config = new ConsumerConfig
+        try
         {
-            BootstrapServers = _config.BootstrapServers,
-            GroupId = groupId,
-            ClientId = _config.ClientId,
-            SecurityProtocol = _config.SecurityProtocol,
-            SaslMechanism = _config.SaslMechanism,
-            SaslUsername = _config.SaslUsername,
-            SaslPassword = _config.SaslPassword,
-            AutoOffsetReset = AutoOffsetReset.Earliest,
-            EnableAutoCommit = _config.EnableAutoCommit,
-            EnableAutoOffsetStore = false,
-            SessionTimeoutMs = 30000,
-            HeartbeatIntervalMs = 3000
-        };
+            _logger.LogInformation("Deleting topic {Topic}", topicName);
 
-        return new ConsumerBuilder<string, string>(config)
-            .SetErrorHandler((_, error) =>
+            using var adminClient = new AdminClientBuilder(new AdminClientConfig
             {
-                _logger.LogError("Kafka consumer error: {Reason}", error.Reason);
-            })
-            .SetPartitionsAssignedHandler((_, partitions) =>
-            {
-                _logger.LogInformation("Partitions assigned: {Partitions}",
-                    string.Join(", ", partitions.Select(p => $"{p.Topic}[{p.Partition.Value}]")));
-            })
-            .Build();
+                BootstrapServers = _producerConfig.BootstrapServers
+            }).Build();
+
+            await adminClient.DeleteTopicsAsync(new[] { topicName });
+
+            _logger.LogInformation("Topic {Topic} deleted successfully", topicName);
+        }
+        catch (DeleteTopicsException ex)
+        {
+            _logger.LogError(ex, "Failed to delete topic {Topic}", topicName);
+            throw;
+        }
     }
 
-    public void Dispose()
+    public async Task<KafkaTopicInfo> GetTopicInfoAsync(
+        string topicName,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var adminClient = new AdminClientBuilder(new AdminClientConfig
+            {
+                BootstrapServers = _producerConfig.BootstrapServers
+            }).Build();
+
+            var metadata = adminClient.GetMetadata(topicName, TimeSpan.FromSeconds(10));
+            var topic = metadata.Topics.FirstOrDefault(t => t.Topic == topicName);
+
+            if (topic == null)
+                throw new InvalidOperationException($"Topic {topicName} not found");
+
+            var info = new KafkaTopicInfo(
+                topic.Topic,
+                topic.Partitions.Count,
+                topic.Partitions.Select(p => new PartitionInfo(
+                    p.PartitionId,
+                    p.Leader,
+                    p.Replicas.Length
+                )).ToList()
+            );
+
+            return await Task.FromResult(info);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get topic info for {Topic}", topicName);
+            throw;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
     {
         _producer?.Dispose();
         _consumer?.Dispose();
+        await Task.CompletedTask;
+        _logger.LogDebug("Kafka connector disposed");
     }
 }
 
-/// <summary>
-/// Kafka connector configuration
-/// </summary>
-public record KafkaConfig(
-    string BootstrapServers,
-    string? ClientId = null,
-    SecurityProtocol SecurityProtocol = SecurityProtocol.Plaintext,
-    SaslMechanism? SaslMechanism = null,
-    string? SaslUsername = null,
-    string? SaslPassword = null,
-    bool EnableAutoCommit = false
-);
-
-/// <summary>
-/// Topic information
-/// </summary>
-public record TopicInfo(
-    string Name,
+public record KafkaTopicInfo(
+    string TopicName,
     int PartitionCount,
-    string? Error = null
+    List<PartitionInfo> Partitions
 );
 
-/// <summary>
-/// Interface for streaming data connectors
-/// </summary>
-public interface IStreamingConnector : IDataConnector, IDisposable
-{
-    Task ProduceAsync<T>(string topic, T value, string? key = null, CancellationToken cancellationToken = default) where T : class;
-    Task ProduceBatchAsync<T>(string topic, IEnumerable<T> values, Func<T, string>? keySelector = null, CancellationToken cancellationToken = default) where T : class;
-    IAsyncEnumerable<T> ConsumeAsync<T>(string topic, string consumerGroup, CancellationToken cancellationToken = default) where T : class;
-    Task<List<TopicInfo>> ListTopicsAsync(CancellationToken cancellationToken = default);
-}
+public record PartitionInfo(
+    int PartitionId,
+    int Leader,
+    int ReplicaCount
+);

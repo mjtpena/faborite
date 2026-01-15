@@ -27,7 +27,7 @@
 
   <ItemGroup>
     <!-- Azure SDKs for OneLake access -->
-    <PackageReference Include="Azure.Identity" Version="1.13.1" />
+    <PackageReference Include="Azure.Identity" Version="1.14.2" />
     <PackageReference Include="Azure.Storage.Files.DataLake" Version="12.21.0" />
     
     <!-- Parquet support -->
@@ -55,7 +55,7 @@
     <!-- Database Connectors -->
     <PackageReference Include="Npgsql" Version="9.0.2" />
     <PackageReference Include="MySqlConnector" Version="2.4.0" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.3" />
     
     <!-- Streaming Connectors -->
     <PackageReference Include="Confluent.Kafka" Version="2.6.1" />

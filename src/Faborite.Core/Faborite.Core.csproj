@@ -77,6 +77,10 @@
     <PackageReference Include="AWSSDK.S3" Version="3.7.408.4" />
     <PackageReference Include="Google.Cloud.Storage.V1" Version="4.10.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.23.0" />
+    
+    <!-- NoSQL Extended -->
+    <PackageReference Include="CassandraCSharpDriver" Version="3.21.0" />
+    <PackageReference Include="Elasticsearch.Net" Version="7.17.5" />
   </ItemGroup>
 
 </Project>

@@ -71,6 +71,7 @@
     <!-- NoSQL Connectors -->
     <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
     <PackageReference Include="MongoDB.Driver" Version="2.31.0" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.45.0" />
   </ItemGroup>
 
 </Project>

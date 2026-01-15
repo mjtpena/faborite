@@ -90,6 +90,12 @@
     
     <!-- Graph & Documents -->
     <PackageReference Include="Neo4j.Driver" Version="5.26.0" />
+    
+    <!-- Enterprise Databases -->
+    <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.6.1" />
+    
+    <!-- Streaming Platforms -->
+    <PackageReference Include="Confluent.Kafka" Version="2.6.1" />
   </ItemGroup>
 
 </Project>

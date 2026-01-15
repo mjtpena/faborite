@@ -171,8 +171,10 @@ var analysis = await optimizer.AnalyzeQueryAsync(sqlQuery);
 - [ML/AI Usage](docs/ml-ai/)
 - [API Reference](docs/api/)
 - [Architecture Decisions](docs/architecture/)
-- [Issue Tracking](TRACKING.md)
-- [Feature Plans](FEATURE_GAPS_300.md)
+- **[GitHub Issues](https://github.com/mjtpena/faborite/issues)** - Track bugs, features, and enhancements
+- **[GitHub Projects](https://github.com/mjtpena/faborite/projects)** - Sprint planning and roadmap
+- [Product Vision](docs/archive/PRODUCT_VISION.md)
+- [Feature Roadmap](docs/archive/FEATURE_GAPS_300.md)
 
 ## 🤝 Contributing
 
@@ -214,14 +216,14 @@ Built with:
 
 ## 🎯 Roadmap
 
-See [TRACKING.md](TRACKING.md) for detailed feature roadmap and progress.
+See **[GitHub Issues](https://github.com/mjtpena/faborite/issues)** for active development tracking.
 
 ### Upcoming Features
-- Neural network integration (ONNX Runtime)
-- Azure ML & AWS SageMaker integration
-- Advanced graph analytics
-- Real-time data streaming UI
-- Kubernetes operators
+- [ONNX Runtime neural network integration](https://github.com/mjtpena/faborite/issues)
+- [Azure ML & AWS SageMaker integration](https://github.com/mjtpena/faborite/issues)
+- [Connection pooling & circuit breaker patterns](https://github.com/mjtpena/faborite/issues)
+- [Model monitoring & drift detection](https://github.com/mjtpena/faborite/issues)
+- [Integration tests with Testcontainers](https://github.com/mjtpena/faborite/issues)
 
 ---
 

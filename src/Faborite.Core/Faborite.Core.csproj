@@ -84,6 +84,12 @@
     
     <!-- Streaming Extended -->
     <PackageReference Include="DotPulsar" Version="3.3.3" />
+    
+    <!-- File Transfer -->
+    <PackageReference Include="SSH.NET" Version="2024.2.0" />
+    
+    <!-- Graph & Documents -->
+    <PackageReference Include="Neo4j.Driver" Version="5.26.0" />
   </ItemGroup>
 
 </Project>

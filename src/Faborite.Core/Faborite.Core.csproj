@@ -62,6 +62,7 @@
     <PackageReference Include="Azure.Messaging.EventHubs" Version="5.11.5" />
     <PackageReference Include="Azure.Messaging.EventHubs.Processor" Version="5.11.5" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.23.0" />
+    <PackageReference Include="AWSSDK.Kinesis" Version="3.7.403.10" />
     
     <!-- Cloud Data Warehouse Connectors -->
     <PackageReference Include="Snowflake.Data" Version="4.3.0" />

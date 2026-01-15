@@ -10,53 +10,7 @@ namespace Faborite.Core.Connectors.Database;
 #region Cloud Data Warehouses
 
 // SnowflakeConnector moved to separate file: SnowflakeConnector.cs (Production-ready implementation)
-
-/// <summary>
-/// Amazon Redshift connector with Spectrum support. Issue #132
-/// </summary>
-public class RedshiftConnector : IQueryableConnector
-{
-    private readonly ILogger<RedshiftConnector> _logger;
-    private readonly string _cluster;
-
-    public string Name => "Redshift";
-    public string Version => "1.0.0";
-
-    public RedshiftConnector(ILogger<RedshiftConnector> logger, string cluster)
-    {
-        _logger = logger;
-        _cluster = cluster;
-    }
-
-    public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Testing Redshift connection to {Cluster}", _cluster);
-        await Task.Delay(100, cancellationToken);
-        return true;
-    }
-
-    public async Task<ConnectorMetadata> GetMetadataAsync(CancellationToken cancellationToken = default)
-    {
-        return new ConnectorMetadata(
-            "Redshift",
-            Version,
-            new Dictionary<string, string> { ["Spectrum"] = "true", ["Concurrency"] = "50" },
-            new List<string> { "Query", "COPY", "UNLOAD" }
-        );
-    }
-
-    public async Task<QueryResult> ExecuteQueryAsync(string query, CancellationToken cancellationToken = default)
-    {
-        await Task.Delay(100, cancellationToken);
-        return new QueryResult(new List<Dictionary<string, object?>>(), new List<ColumnMetadata>(), 0, TimeSpan.FromSeconds(1));
-    }
-
-    public async Task<List<TableInfo>> ListTablesAsync(CancellationToken cancellationToken = default)
-    {
-        await Task.Delay(100, cancellationToken);
-        return new List<TableInfo>();
-    }
-}
+// RedshiftConnector moved to separate file: RedshiftConnector.cs (Production-ready implementation)
 
 // BigQueryConnector moved to separate file: BigQueryConnector.cs (Production-ready implementation)
 

@@ -100,8 +100,11 @@
     
     <!-- Time Series -->
     <PackageReference Include="InfluxDB.Client" Version="4.21.0" />
-    <PackageReference Include="Prometheus.Client" Version="9.0.0" />
-    <PackageReference Include="Prometheus.Client.HttpRequestDurations" Version="9.0.0" />
+    <PackageReference Include="Prometheus.Client" Version="6.1.0" />
+    
+    <!-- Machine Learning -->
+    <PackageReference Include="Microsoft.ML" Version="4.0.0" />
+    <PackageReference Include="Microsoft.ML.AutoML" Version="0.22.0" />
   </ItemGroup>
 
 </Project>

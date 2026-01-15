@@ -65,6 +65,7 @@
     
     <!-- Cloud Data Warehouse Connectors -->
     <PackageReference Include="Snowflake.Data" Version="4.3.0" />
+    <PackageReference Include="Google.Cloud.BigQuery.V2" Version="3.11.0" />
     
     <!-- NoSQL Connectors -->
     <PackageReference Include="StackExchange.Redis" Version="2.8.16" />

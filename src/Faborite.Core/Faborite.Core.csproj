@@ -58,7 +58,7 @@
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
     
     <!-- Streaming Connectors -->
-    <PackageReference Include="Confluent.Kafka" Version="2.6.1" />
+    <PackageReference Include="Confluent.Kafka" Version="2.13.0" />
     <PackageReference Include="Azure.Messaging.EventHubs" Version="5.11.5" />
     <PackageReference Include="Azure.Messaging.EventHubs.Processor" Version="5.11.5" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.23.0" />
@@ -95,7 +95,7 @@
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.6.1" />
     
     <!-- Streaming Platforms -->
-    <PackageReference Include="Confluent.Kafka" Version="2.6.1" />
+    <PackageReference Include="Confluent.Kafka" Version="2.13.0" />
     <PackageReference Include="RabbitMQ.Client" Version="7.0.0" />
     
     <!-- Time Series -->
